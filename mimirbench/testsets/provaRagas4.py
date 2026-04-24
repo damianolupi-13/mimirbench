@@ -33,7 +33,7 @@ from ragas.testset.transforms import (
 pd.set_option('display.max_colwidth', None)
 pd.set_option('display.max_rows', None)
 
-load_dotenv("api_key.env")
+load_dotenv("../../api_key.env")
 os.environ["OPENAI_API_KEY"] = os.environ.get("API_KEY")
 
 status = 3

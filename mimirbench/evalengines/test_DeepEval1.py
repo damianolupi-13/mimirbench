@@ -24,7 +24,7 @@ from deepeval.metrics import (
     GEval
 )
 
-load_dotenv("api_key.env")
+load_dotenv("../../api_key.env")
 os.environ["OPENAI_API_KEY"] = os.environ.get("API_KEY")
 
 CSV_FILE = "Risultati_Mimir_Pytest.csv"
