@@ -9,19 +9,19 @@ class BaseTestset(ABC):
     """
 
     #Costruttore con filepath dei dati/documenti da analizzare o da cui prendere il testset di domande
-    def __init__(self, filepath: str, output_csv_path: str):
-        self.data_filepath = filepath
+    def __init__(self):
+        self.data_filepath = None
         self.docs = None
-        self.output_csv = output_csv_path
+        self.output_csv = None
 
     #Metodo astratto per il caricamento dei dati/documenti
     @abstractmethod
-    def load(self):
+    def load(self,  filepath: str):
         """Ogni sottoclasse deve implementare come caricare i dati/documenti."""
         pass
 
     #Metodo astratto per la generazione del file .CSV testset
     @abstractmethod
-    def generate_testset(self):
+    def generate_testset(self, output_csv_path: str):
         """Ogni sottoclasse deve implementare come generare il testset in file .CSV."""
         pass
