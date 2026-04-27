@@ -1,14 +1,14 @@
-#Implementare classe testset modulo operazionale per retenzione memoria
+#Implementare classe testset modulo operazionale per retenzione memoria, graph health ecc...
 
 import pandas as pd
 from pathlib import Path
 from langchain_community.document_loaders import PyPDFLoader, TextLoader, Docx2txtLoader, UnstructuredMarkdownLoader
 from mimirbench.testsets.base import BaseTestset
 
-class MemoryTestset(BaseTestset):
+class MemoryTechnicalTestset(BaseTestset):
     """
-        Classe per caricare documenti testuali o tabellari contenenti un copione di domande,
-        per convertirle in un testset .CSV in modo tale da valutare la memoria dell'agente.
+        Classe per caricare documenti testuali o tabellari contenenti un insieme di domande,
+        per convertirle in un testset .CSV in modo tale da valutare la memoria o aspetti tecnici dell'agente.
 
     Args:
         separator (str) (optional): La stringa usata nel documento TESTUALE per separare una domanda dall'altra.
