@@ -52,9 +52,9 @@ class MemoryTechnicalTestset(BaseTestset):
 
         #Controlla se docs è un dataframe o un insieme di documenti NON tabellari
         if isinstance(self.docs, pd.DataFrame):
-            print(f"✅ Tabella caricata: lette {len(self.docs)} righe.")
+            print(f"Tabella caricata: lette {len(self.docs)} righe.")
         else:
-            print(f"✅ Documento di testo caricato: lette {len(self.docs)} pagine/blocchi.")
+            print(f"Documento di testo caricato: lette {len(self.docs)} pagine/blocchi.")
 
     def generate_testset(self, output_csv_path: str):
         """
