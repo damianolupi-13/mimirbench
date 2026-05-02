@@ -8,10 +8,10 @@ class BaseTestset(ABC):
         Da estendere per creare un testset particolare.
     """
 
-    #Costruttore con filepath dei dati/documenti da analizzare o da cui prendere il testset di domande
+    #Costruttore con filepaths dei dati/documenti da analizzare o da cui prendere i testset di domande
     def __init__(self):
-        self.data_filepath = None
-        self.docs = None
+        self.loaded_filepaths = []
+        self.docs = []
         self.output_csv = None
 
     #Metodo astratto per il caricamento dei dati/documenti

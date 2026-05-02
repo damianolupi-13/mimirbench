@@ -2,8 +2,7 @@
 
 import pandas as pd
 from pathlib import Path
-from langchain_community.document_loaders import PyPDFLoader, TextLoader, Docx2txtLoader
-from openai import AsyncOpenAI
+from langchain_community.document_loaders import PyPDFLoader, TextLoader, UnstructuredWordDocumentLoader, UnstructuredMarkdownLoader
 
 # Import necessari Ragas
 from ragas.llms import llm_factory
@@ -56,38 +55,38 @@ class ContextualTestset(BaseTestset):
 
     #Implementazione metodo load del caso base per caso contextual
     def load(self,  filepath: str):
-        self.data_filepath = filepath
+        # Salviamo i file caricati in una lista
+        if not filepath in self.loaded_filepaths:
+            self.loaded_filepaths.append(filepath)
 
-        extension = Path(self.data_filepath).suffix.lower()
+            extension = Path(filepath).suffix.lower()
 
-        #Match/Case basato sull'extension
-        match extension:
-            case ".pdf":
-                loader = PyPDFLoader(self.data_filepath)
-                self.docs = loader.load()
-            case ".docx":
-                loader = Docx2txtLoader(self.data_filepath)
-                self.docs = loader.load()
-            case ".txt":
-                loader = TextLoader(self.data_filepath, encoding="utf-8")
-                self.docs = loader.load()
-            case _:
-                raise ValueError(f"Formato file non supportato: {extension}")
+            #Match/Case basato sull'extension
+            nuovi_docs = []
+            match extension:
+                case ".pdf":
+                    loader = PyPDFLoader(filepath)
+                    nuovi_docs = loader.load()
+                case ".docx":
+                    loader = UnstructuredWordDocumentLoader(filepath)
+                    nuovi_docs = loader.load()
+                case ".txt":
+                    loader = TextLoader(filepath, encoding="utf-8")
+                    nuovi_docs = loader.load()
+                case ".md":
+                    loader = UnstructuredMarkdownLoader(filepath)
+                    nuovi_docs = loader.load()
+                case _:
+                    raise ValueError(f"Formato file non supportato: {extension}")
 
-        if len(self.docs) > self.soglia_limite:
-            print(f"\n[!] ALERT: Rilevate {len(self.docs)} pagine. Il documento è composto da troppe pagine.")
+            #Eventualmente inserire un taglio del documento da versioni passati
+            print(f"\n[i] File '{filepath}' ({len(nuovi_docs)} chunks) aggiunto")
 
-            start_page = self.pagina_di_partenza
-
-            # La funzione min() assicura che se si supera la grandezza del PDF,
-            # l'end_page si fermerà all'ultima pagina reale del documento.
-            end_page = min(start_page + self.pagine_da_estrarre, len(self.docs))
-
-            self.docs = self.docs[start_page:end_page]
-
-            print(f"[!] TAGLIO APPLICATO: Mantenute {len(self.docs)} pagine (dalla {start_page} alla {end_page}).")
+            # Accodiamo i docs nuovi all'insieme
+            self.docs.extend(nuovi_docs)
+            print(f"\nAccodamento completato. Chunks totali in memoria pronti per il testset: {len(self.docs)}")
         else:
-            print(f"\n[i] Documento di {len(self.docs)} pagine: entro i limiti di sicurezza, elaboro il file completo.")
+            print("File già caricato!")
 
     def generate_testset(self, output_csv_path: str):
         # Valori di settings
@@ -101,7 +100,7 @@ class ContextualTestset(BaseTestset):
         generator_embeddings = OpenAIEmbeddings(client=self.model_client, model=self.embedding_model)
 
         # --- FUNZIONI DI FILTRO PER I COMPONENTI "LOCALI" ---
-        # I due filtri che ci servono per smistare il traffico
+        #Contiamo e facciamo la media dei tipi di chunks estratti dai documenti (in base al conteggio dei token)
         counts = [num_tokens_from_string(doc.page_content) for doc in self.docs]
         pct_long = sum(1 for c in counts if c > 500) / len(self.docs)
         pct_med = sum(1 for c in counts if 101 <= c <= 500) / len(self.docs)
@@ -121,10 +120,10 @@ class ContextualTestset(BaseTestset):
 
         # --- BIVIO LOGICO --- Costruzione dei transforms per il grafo di Ragas, a seconda della lunghezza dei chunks del documento
         if pct_long >= 0.25:
-            print(f">>> Rilevati DOCUMENTI LUNGHI ({pct_long:.0%}). Applico Splitter.")
+            print(f"\n>>> Rilevati DOCUMENTI LUNGHI ({pct_long:.0%}). Applico Splitter.")
             custom_transforms = [
                 HeadlinesExtractor(llm=generator_llm, filter_nodes=filter_doc_long),
-                # FIX AGID: Non crasha se mancano le headlines
+                # FIX: Non crasha se mancano le headlines
                 HeadlineSplitter(filter_nodes=lambda n: 'headlines' in n.properties and n.properties['headlines']),
                 SummaryExtractor(llm=generator_llm, filter_nodes=filter_doc_long),
                 CustomNodeFilter(llm=generator_llm, filter_nodes=filter_chunks),
@@ -143,9 +142,8 @@ class ContextualTestset(BaseTestset):
             ]
 
         elif pct_med >= 0.25:
-            print(f">>> Rilevati DOCUMENTI MEDI ({pct_med:.0%}). Uso logica Page-level.")
+            print(f"\n>>> Rilevati DOCUMENTI MEDI ({pct_med:.0%}).")
             custom_transforms = [
-                # Invertito l'ordine per evitare l'errore "No summary"
                 SummaryExtractor(llm=generator_llm, filter_nodes=filter_doc_med),
                 CustomNodeFilter(llm=generator_llm),
                 Parallel(
@@ -161,7 +159,7 @@ class ContextualTestset(BaseTestset):
                 )
             ]
         else:
-            print(">>> Documenti molto corti. Inserire documenti pù lunghi.")
+            print("\n>>> Documenti molto corti. Inserire documenti pù lunghi.")
 
         # Generator
         lingua_scelta = self.language
@@ -172,7 +170,7 @@ class ContextualTestset(BaseTestset):
         )
 
         # Risultato
-        print("\nAvvio generazione con pipeline Default completa + Fix...")
+        print("\nAvvio generazione...")
         # Passiamo 'transforms=custom_transforms' per attivare tutto
         dataset = generator.generate_with_langchain_docs(
             self.docs,

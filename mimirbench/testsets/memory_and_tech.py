@@ -2,7 +2,7 @@
 
 import pandas as pd
 from pathlib import Path
-from langchain_community.document_loaders import PyPDFLoader, TextLoader, Docx2txtLoader, UnstructuredMarkdownLoader
+from langchain_community.document_loaders import PyPDFLoader, TextLoader, UnstructuredMarkdownLoader, UnstructuredWordDocumentLoader
 from mimirbench.testsets.base import BaseTestset
 
 class MemoryTechnicalTestset(BaseTestset):
@@ -21,30 +21,29 @@ class MemoryTechnicalTestset(BaseTestset):
 
     def load(self, filepath: str):
         """Carica il documento e ne estrae il contenuto grezzo."""
-        self.data_filepath = filepath
-        extension = Path(self.data_filepath).suffix.lower()
+        extension = Path(filepath).suffix.lower()
 
         # Match/Case basato sull'estensione
         match extension:
             #Documenti NON Tabellari e Testuali
             case ".pdf":
-                loader = PyPDFLoader(self.data_filepath)
+                loader = PyPDFLoader(filepath)
                 self.docs = loader.load()
             case ".docx":
-                loader = Docx2txtLoader(self.data_filepath)
+                loader = UnstructuredWordDocumentLoader(filepath)
                 self.docs = loader.load()
             case ".txt":
-                loader = TextLoader(self.data_filepath, encoding="utf-8")
+                loader = TextLoader(filepath, encoding="utf-8")
                 self.docs = loader.load()
             case ".md":
-                loader = UnstructuredMarkdownLoader(self.data_filepath)
+                loader = UnstructuredMarkdownLoader(filepath)
                 self.docs = loader.load()
 
             #Documenti Tabellari
             case ".csv":
-                self.docs = pd.read_csv(self.data_filepath)
+                self.docs = pd.read_csv(filepath)
             case ".xlsx":
-                self.docs = pd.read_excel(self.data_filepath)
+                self.docs = pd.read_excel(filepath)
 
             #Failsafe
             case _:
