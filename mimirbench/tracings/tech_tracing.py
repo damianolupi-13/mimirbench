@@ -10,7 +10,7 @@ class TechnicalTraceExtractor(BaseTraceExtractor):
     def __init__(self, tracing_tag: str):
         super().__init__(tracing_tag)
 
-    # Metodo per il fetching di determinate caratteristiche dell'output non servono
+    # Metodo per il fetching di determinate caratteristiche dell'output non serve
     def fetching(self,  trace_output):
         return None
 
