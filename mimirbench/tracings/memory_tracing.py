@@ -12,20 +12,28 @@ class MemoryTraceExtractor(BaseTraceExtractor):
         super().__init__(tracing_tag)
 
     def fetching(self, trace_output):
+        """
+            Parser per estrarre il puro dialogo verbale dall'output di una traccia
+        """
+        # trace_output deve essere un dizionario
         if not isinstance(trace_output, dict):
             return None, None
 
+        # Estrazione del ruolo e contenuto dell'output della traccia
         tipo = trace_output.get("type") or trace_output.get("role")
         content = trace_output.get("content", "")
 
+        # Gestione messaggio dell'utente
         if tipo in ["user", "human"]:
             return "user", content
 
+        # Gestione messaggio dell'agente
         if tipo in ["assistant", "ai"]:
             if trace_output.get("tool_calls") or trace_output.get("additional_kwargs", {}).get("tool_calls"):
-                return None, None
+                return None, None #ignora le chiamate ai tool
             return "assistant", content
 
+        # Gestione dei messaggi nel caso in cui il framework usato li gestisce come serializzazioni delle classi python con id
         if "kwargs" in trace_output and "id" in trace_output:
             class_name = trace_output["id"][-1] if isinstance(trace_output["id"], list) else str(trace_output["id"])
             content = trace_output["kwargs"].get("content", "")
@@ -38,10 +46,13 @@ class MemoryTraceExtractor(BaseTraceExtractor):
         return None, None
 
     def extracting(self, output_json_path: str):
+        """
+            Estrazione della conversazione più recente e più lunga possibile, trovando la traccia che la contiene.
+        """
         print("ESTRAZIONE CONVERSAZIONE COMPLETA da Langfuse...\n")
 
         try:
-            # 1. Recuperiamo tutte le tracce con il tag
+            # Recuperiamo tutte le tracce con il tag
             res = self.langfuse_instance.api.trace.list(limit=100, tags=[self.tracing_tag])
 
             if not res.data:
@@ -53,7 +64,7 @@ class MemoryTraceExtractor(BaseTraceExtractor):
             conversazione_migliore = None
             max_turni_trovati = 0
 
-            # 2. Ordiniamo le tracce dalla più VECCHIA alla più NUOVA
+            # Ordiniamo le tracce dalla più VECCHIA alla più NUOVA
             # Così se usiamo il ">=", la più recente sovrascriverà quella vecchia a parità di turni
             tracce_ordinate = sorted(res.data, key=lambda x: getattr(x, 'timestamp', 0))
 
@@ -62,14 +73,17 @@ class MemoryTraceExtractor(BaseTraceExtractor):
                 trace = self.langfuse_instance.api.trace.get(t_info.id)
                 turni_della_traccia = []
 
+                # Ordiniamo le observation della traccia dalla più vecchia alla più nuova e prendiamo i react_agent
                 osservazioni = sorted(trace.observations, key=lambda x: getattr(x, 'start_time', 0))
                 nodi_react_agent = [obs for obs in osservazioni if obs.name == "react_agent"]
 
                 if nodi_react_agent:
-                    # Prendiamo solo l'ultimo passaggio nel react_agent per evitare loop dei tools
+                    # Prendiamo solo l'ultimo passaggio nel react_agent per evitare chiamate ai tools
                     ultimo_obs = nodi_react_agent[-1]
                     tutti_i_messaggi = []
 
+                    # L'ultimo nodo contiene lo storico della chat in "input" e la risposta finale in "output"
+                    # Inseriamo tutto in una lista cronologica senza doppioni, dove ogni messaggio è un dict
                     if ultimo_obs.input and isinstance(ultimo_obs.input, dict) and "messages" in ultimo_obs.input:
                         tutti_i_messaggi.extend(ultimo_obs.input["messages"])
 
@@ -78,22 +92,21 @@ class MemoryTraceExtractor(BaseTraceExtractor):
                             if m not in tutti_i_messaggi:
                                 tutti_i_messaggi.append(m)
 
-                    # Ricostruiamo le coppie domanda/risposta
+                    # Ricostruiamo le coppie domanda/risposta con il fetching
                     domanda_tmp = ""
                     for msg in tutti_i_messaggi:
                         ruolo, testo = self.fetching(msg)
-
                         if ruolo == "user" and testo:
-                            domanda_tmp = testo
+                            domanda_tmp = testo # testo qui è la domanda dell'utente
                         elif ruolo == "assistant" and testo:
-                            if domanda_tmp:
+                            if domanda_tmp: # Prende domanda utente e la unisce alla risposta ai (testo)
                                 turni_della_traccia.append({
                                     "input": domanda_tmp,
                                     "actual_output": testo
                                 })
                                 domanda_tmp = ""
 
-                                # 4. IL TUO FIX: usiamo ">=" per prendere la più lunga e, a parità, la più recente!
+                # Usiamo ">=" per prendere la più lunga e, a parità, la più recente
                 numero_turni_attuali = len(turni_della_traccia)
                 if numero_turni_attuali >= max_turni_trovati and numero_turni_attuali >= 2:
                     max_turni_trovati = numero_turni_attuali
@@ -106,14 +119,14 @@ class MemoryTraceExtractor(BaseTraceExtractor):
             # --- ASSEMBLAGGIO FINALE ---
             if conversazione_migliore:
                 print(
-                    f"TROVATA! La traccia più completa (e recente) è la {conversazione_migliore['id_traccia_finale']} con {conversazione_migliore['numero_turni']} turni.")
+                    f"La traccia più completa e recente è la {conversazione_migliore['id_traccia_finale']} con {conversazione_migliore['numero_turni']} turni.")
 
                 dati_da_salvare = [conversazione_migliore]
 
                 with open(output_json_path, "w", encoding="utf-8") as f:
                     json.dump(dati_da_salvare, f, indent=4, ensure_ascii=False)
 
-                print(f"Estrazione completata! JSON pronto per DeepEval.")
+                print(f"Estrazione completata. JSON pronto.")
             else:
                 print(
                     f"Nessuna traccia contiene una conversazione di almeno 2 turni. Impossibile valutare la memoria.\n")

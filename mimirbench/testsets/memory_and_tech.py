@@ -82,7 +82,7 @@ class MemoryTechnicalTestset(BaseTestset):
             # 1. Uniamo tutto il testo
             testo_completo = "\n".join([doc.page_content for doc in self.docs])
 
-            # 2. Affettiamo col separatore scelto dall'utente
+            # 2. Dividiamo col separatore scelto dall'utente
             porzioni = testo_completo.split(self.separator)
 
             # 3. Pulizia spazi e invii accidentali

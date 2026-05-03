@@ -21,7 +21,7 @@ class ContextualTraceExtractor(BaseTraceExtractor):
         return None
 
     def extracting(self, output_json_path: str):
-        print("🚀 ESTRAZIONE DIRETTA da Langfuse (Numerazione in ordine cronologico inverso)...\n")
+        print("ESTRAZIONE DIRETTA da Langfuse (Numerazione in ordine cronologico inverso)...\n")
         dati_estratti = []  # Lista che conterrà i dizionari da salvare in JSON
 
         try:
@@ -30,7 +30,7 @@ class ContextualTraceExtractor(BaseTraceExtractor):
             for i, t_info in enumerate(res.data):
                 trace = self.langfuse_instance.api.trace.get(t_info.id)
 
-                faldone_reale = []
+                faldone_documenti = []
                 risposta_finale = ""
                 domanda_utente = ""
 
@@ -38,11 +38,11 @@ class ContextualTraceExtractor(BaseTraceExtractor):
                 for obs in trace.observations:
                     if obs.name == "react_agent":
                         testo = self.fetching(obs.output)
-                        if testo:  # Manteniamo un controllo su quale effettivamente dei react_agent formula la risposta
+                        if testo:  # Manteniamo un controllo su quale effettivamente delle fasi react_agent formula la risposta
                             # Abbiamo trovato l'ultimo react_agent (quello della risposta)
                             input_data = getattr(obs, 'input', {})
                             if isinstance(input_data, dict):
-                                faldone_reale = input_data.get("documents", [])
+                                faldone_documenti = input_data.get("documents", [])
                                 risposta_finale = testo
 
                                 # Domanda dell'utente (ultimo messaggio human nello stato)
@@ -57,10 +57,10 @@ class ContextualTraceExtractor(BaseTraceExtractor):
                 print(f"==================== TRACCIA {i + 1} ====================")
                 print(f"DOMANDA: {domanda_utente}")
                 print(f"RISPOSTA: {risposta_finale[:150]}...")
-                print(f"DOCUMENTI: {len(faldone_reale)}")
+                print(f"DOCUMENTI: {len(faldone_documenti)}")
 
-                if faldone_reale:
-                    for idx, doc in enumerate(faldone_reale):
+                if faldone_documenti:
+                    for idx, doc in enumerate(faldone_documenti):
                         # Estraiamo l'ID e la pagina dai metadati
                         meta = doc.get("metadata", {})
                         pag = meta.get("page_numbers", ["?"])[0]
@@ -68,8 +68,8 @@ class ContextualTraceExtractor(BaseTraceExtractor):
                 print("=" * 60 + "\n")
 
                 # Estrazione informazioni per DeepEval
-                if domanda_utente and risposta_finale and faldone_reale:
-                    contesti_testuali = [doc.get("page_content", "") for doc in faldone_reale]
+                if domanda_utente and risposta_finale and faldone_documenti:
+                    contesti_testuali = [doc.get("page_content", "") for doc in faldone_documenti]
 
                     # Creiamo un dizionario per questa traccia
                     traccia_data = {

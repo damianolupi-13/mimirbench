@@ -10,6 +10,7 @@ class TechnicalTraceExtractor(BaseTraceExtractor):
     def __init__(self, tracing_tag: str):
         super().__init__(tracing_tag)
 
+    # Metodo per il fetching di determinate caratteristiche dell'output non servono
     def fetching(self,  trace_output):
         return None
 
@@ -32,12 +33,11 @@ class TechnicalTraceExtractor(BaseTraceExtractor):
                 latenza_sec = getattr(trace, "latency", 0)
                 total_tokens = 0  # Inizializziamo a 0, lo calcoleremo noi
 
-                # Ordinamento cronologico
+                # Ordinamento cronologico delle osservazioni della traccia analizzata dalla più vecchia alla più nuova
                 osservazioni = sorted(trace.observations, key=lambda x: getattr(x, 'start_time', 0))
 
                 for obs in osservazioni:
-
-                    # --- 0. CALCOLO TOKEN (Dal nodo ChatVertexAI) ---
+                    # --- CALCOLO TOKEN (Dal nodo ChatVertexAI) ---
                     # Identifichiamo il nodo che fa la chiamata LLM (come dal tuo screenshot)
                     if obs.name == "ChatVertexAI" or getattr(obs, "type", "") == "GENERATION":
                         uso = getattr(obs, "usage", None)
@@ -54,7 +54,7 @@ class TechnicalTraceExtractor(BaseTraceExtractor):
                                 elif hasattr(uso, "total_tokens") and uso.total_tokens:
                                     total_tokens += uso.total_tokens
 
-                    # --- 1. CERCHIAMO LA DOMANDA UTENTE ---
+                    # --- CERCHIAMO LA DOMANDA UTENTE ---
                     if not domanda_utente and obs.input and isinstance(obs.input, dict):
                         messages = obs.input.get("messages", [])
                         if isinstance(messages, list):
@@ -63,7 +63,7 @@ class TechnicalTraceExtractor(BaseTraceExtractor):
                                     domanda_utente = m.get("content")
                                     break
 
-                    # --- 2. CERCHIAMO IL NODO "tools" ---
+                    # --- CERCHIAMO IL NODO "tools" ---
                     if obs.name == "tools" and obs.output and isinstance(obs.output, dict):
                         messages = obs.output.get("messages", [])
                         for msg in messages:
@@ -73,7 +73,7 @@ class TechnicalTraceExtractor(BaseTraceExtractor):
                                 risposta_del_tool = content if isinstance(content, str) else json.dumps(content,
                                                                                                         ensure_ascii=False)
 
-                    # --- 3. CERCHIAMO IL NODO "react_agent" (Risposta discorsiva finale) ---
+                    # --- CERCHIAMO IL NODO "react_agent" (Risposta discorsiva finale) ---
                     if obs.name == "react_agent" and obs.output and isinstance(obs.output, dict):
                         messages = obs.output.get("messages", [])
                         for msg in messages:
@@ -84,12 +84,12 @@ class TechnicalTraceExtractor(BaseTraceExtractor):
 
                 # --- STAMPA A SCHERMO PER DEBUG ---
                 print(f"==================== TRACCIA {i + 1} ====================")
-                print(f"❓ DOMANDA: {domanda_utente}")
-                print(f"🛠️  TOOL SCELTO: {tool_chiamato}")
+                print(f"DOMANDA: {domanda_utente}")
+                print(f"TOOL SCELTO: {tool_chiamato}")
                 if risposta_del_tool:
-                    print(f"📥 RISPOSTA TOOL: {str(risposta_del_tool)[:80]}...")
-                print(f"💡 RISPOSTA FINALE: {str(risposta_finale)[:150]}...")
-                print(f"⏱️  LATENZA: {latenza_sec}s | 🪙 TOKEN: {total_tokens}")
+                    print(f"RISPOSTA TOOL: {str(risposta_del_tool)[:80]}...")
+                print(f"RISPOSTA FINALE: {str(risposta_finale)[:150]}...")
+                print(f"LATENZA: {latenza_sec}s | TOKEN: {total_tokens}")
                 print("=" * 60 + "\n")
 
                 # --- ASSEMBLAGGIO JSON PER DEEPEVAL ---
@@ -109,7 +109,7 @@ class TechnicalTraceExtractor(BaseTraceExtractor):
             with open("tracce_agente.json", "w", encoding="utf-8") as f:
                 json.dump(dati_estratti, f, indent=4, ensure_ascii=False)
 
-            print(f"\n💾 Estrazione completata! {len(dati_estratti)} tracce salvate in 'tracce_agente.json'.")
+            print(f"\nEstrazione completata {len(dati_estratti)} tracce salvate in 'tracce_agente.json'.")
 
         except Exception as e:
-            print(f"❌ ERRORE DURANTE L'ESTRAZIONE: {e}")
+            print(f"ERRORE DURANTE L'ESTRAZIONE: {e}")
