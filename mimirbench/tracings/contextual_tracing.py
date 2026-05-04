@@ -8,11 +8,12 @@ class ContextualTraceExtractor(BaseTraceExtractor):
         Classe per scaricare e usare le traces Langfuse riferite alla valutazione contestuale dell'agente
     """
 
-    def __init__(self, tracing_tag: str):
-        super().__init__(tracing_tag)
+    def __init__(self):
+        super().__init__()
 
     def fetching(self, trace_output):
         """Estrae il testo se è una risposta finale (messaggio AI senza tool calls)"""
+
         if isinstance(trace_output, dict) and "messages" in trace_output:
             last_msg = trace_output["messages"][-1]
             # Se non c'è una chiamata a tool, questa è la nostra risposta
@@ -20,21 +21,40 @@ class ContextualTraceExtractor(BaseTraceExtractor):
                 return last_msg.get("content")
         return None
 
-    def extracting(self, output_json_path: str):
-        print("ESTRAZIONE DIRETTA da Langfuse (Numerazione in ordine cronologico inverso)...\n")
+    def extracting(self, output_json_path: str, test_id: str):
+
+        """
+            Estrazione delle traces per il test contestuale.
+        """
+
+        print("ESTRAZIONE DIRETTA da Langfuse...\n")
         dati_estratti = []  # Lista che conterrà i dizionari da salvare in JSON
-
         try:
-            res = self.langfuse_instance.api.trace.list(limit=100, tags=[self.tracing_tag])
+            res = self.langfuse_instance.api.trace.list(limit=100, tags=["env:test"])
 
-            for i, t_info in enumerate(res.data):
-                trace = self.langfuse_instance.api.trace.get(t_info.id)
+            if not res.data:
+                print("Nessuna traccia trovata con il tag env:test.")
+                return None
+
+            tracce_test = [
+                tr for tr in res.data
+                if tr.metadata and tr.metadata.get("test_id") == test_id
+            ]
+
+            if not tracce_test:
+                print(f"Nessuna traccia trovata con il test_id: {test_id}")
+                return None
+
+            print(f"Trovate {len(tracce_test)} tracce relative a questo test...\n")
+
+            for i, t_info in enumerate(tracce_test):
+                trace = self.langfuse_instance.api.trace.get(t_info.id) #Prendiamo la singola traccia
 
                 faldone_documenti = []
                 risposta_finale = ""
                 domanda_utente = ""
 
-                # CICLO DIRETTO: Langfuse restituisce i dati dal più recente al più vecchio
+                # Langfuse restituisce i dati dal più recente al più vecchio
                 for obs in trace.observations:
                     if obs.name == "react_agent":
                         testo = self.fetching(obs.output)
@@ -86,6 +106,8 @@ class ContextualTraceExtractor(BaseTraceExtractor):
                 json.dump(dati_estratti, f, indent=4, ensure_ascii=False)
 
             print(f"\nEstrazione completata! {len(dati_estratti)} tracce salvate in: {output_json_path}\n")
+
+            return None
 
         except Exception as e:
             print(f"ERRORE: {e}")

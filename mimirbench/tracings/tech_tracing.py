@@ -7,21 +7,36 @@ class TechnicalTraceExtractor(BaseTraceExtractor):
     """
         Classe per scaricare e usare le traces Langfuse riferite alla valutazione tecnica dell'agente
     """
-    def __init__(self, tracing_tag: str):
-        super().__init__(tracing_tag)
+    def __init__(self):
+        super().__init__()
 
     # Metodo per il fetching di determinate caratteristiche dell'output non serve
     def fetching(self,  trace_output):
         return None
 
-    def extracting(self, output_json_path: str):
+    def extracting(self, output_json_path: str, test_id: str):
         print("🚀 ESTRAZIONE DATI AGENTE da Langfuse...\n")
         dati_estratti = []
 
         try:
-            res = self.langfuse_instance.api.trace.list(limit=100, tags=[self.tracing_tag])
+            res = self.langfuse_instance.api.trace.list(limit=100, tags=["env:test"])
 
-            for i, t_info in enumerate(res.data):
+            if not res.data:
+                print("Nessuna traccia trovata con il tag env:test.")
+                return None
+
+            tracce_test = [
+                tr for tr in res.data
+                if tr.metadata and tr.metadata.get("test_id") == test_id
+            ]
+
+            if not tracce_test:
+                print(f"Nessuna traccia trovata con il test_id: {test_id}")
+                return None
+
+            print(f"Trovate {len(tracce_test)} tracce relative a questo test...\n")
+
+            for i, t_info in enumerate(tracce_test):
                 trace = self.langfuse_instance.api.trace.get(t_info.id)
 
                 domanda_utente = ""

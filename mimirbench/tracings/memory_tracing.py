@@ -8,8 +8,8 @@ class MemoryTraceExtractor(BaseTraceExtractor):
         Classe per scaricare e usare le traces Langfuse riferite alla valutazione mnemonica dell'agente
     """
 
-    def __init__(self, tracing_tag: str):
-        super().__init__(tracing_tag)
+    def __init__(self):
+        super().__init__()
 
     def fetching(self, trace_output):
         """
@@ -45,7 +45,7 @@ class MemoryTraceExtractor(BaseTraceExtractor):
 
         return None, None
 
-    def extracting(self, output_json_path: str):
+    def extracting(self, output_json_path: str, test_id: str):
         """
             Estrazione della conversazione più recente e più lunga possibile, trovando la traccia che la contiene.
         """
@@ -53,20 +53,29 @@ class MemoryTraceExtractor(BaseTraceExtractor):
 
         try:
             # Recuperiamo tutte le tracce con il tag
-            res = self.langfuse_instance.api.trace.list(limit=100, tags=[self.tracing_tag])
+            res = self.langfuse_instance.api.trace.list(limit=100, tags=["env:test"])
 
             if not res.data:
-                print("Nessuna traccia trovata con questo tag.")
-                exit()
+                print("Nessuna traccia trovata con il tag env:test.")
+                return None
 
-            print(f"Trovate {len(res.data)} tracce totali. Cerco la conversazione più lunga e recente...\n")
+            tracce_test = [
+                tr for tr in res.data
+                if tr.metadata and tr.metadata.get("test_id") == test_id
+            ]
+
+            if not tracce_test:
+                print(f"Nessuna traccia trovata con il test_id: {test_id}")
+                return None
+
+            print(f"Trovate {len(tracce_test)} tracce totali. Cerco la conversazione più lunga e recente...\n")
 
             conversazione_migliore = None
             max_turni_trovati = 0
 
             # Ordiniamo le tracce dalla più VECCHIA alla più NUOVA
             # Così se usiamo il ">=", la più recente sovrascriverà quella vecchia a parità di turni
-            tracce_ordinate = sorted(res.data, key=lambda x: getattr(x, 'timestamp', 0))
+            tracce_ordinate = sorted(tracce_test, key=lambda x: getattr(x, 'timestamp', 0))
 
             # 3. Analizziamo TUTTE le tracce in ordine cronologico
             for t_info in tracce_ordinate:
@@ -130,6 +139,8 @@ class MemoryTraceExtractor(BaseTraceExtractor):
             else:
                 print(
                     f"Nessuna traccia contiene una conversazione di almeno 2 turni. Impossibile valutare la memoria.\n")
+
+            return None
 
         except Exception as e:
             print(f"ERRORE DURANTE L'ESTRAZIONE: {e}")

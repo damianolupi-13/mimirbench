@@ -12,8 +12,7 @@ class BaseTraceExtractor(ABC):
     """
 
     #Costruttore con tag delle traces da cercare
-    def __init__(self, tracing_tag: str):
-        self.tracing_tag = tracing_tag
+    def __init__(self):
         self.langfuse_instance = Langfuse()
 
     #Metodo astratto per il recupero di informazioni necessarie (se serve)
@@ -25,7 +24,7 @@ class BaseTraceExtractor(ABC):
 
     #Metodo astratto per la generazione del file .JSON
     @abstractmethod
-    def extracting(self, output_json_path: str):
+    def extracting(self, output_json_path: str, test_id: str):
         """Ogni sottoclasse deve implementare come estrarre informazioni volute dalle traces Langfuse
            e organizzarle in un JSON."""
         pass
