@@ -58,7 +58,7 @@ class ContextualTestset(BaseTestset):
         Args:
             spiegare gli argomenti
     """
-    def __init__(self, testset_size: int, model: str, client, embedding: str, context: str, language: str, max_tokens = 8192,
+    def __init__(self, testset_size: int, model: str, client, embedding: str, context: str, max_tokens = 8192,
                  soglia_limite=100, pagine_da_estrarre=100, pagina_di_partenza=1):
         super().__init__()
         self.testset_size = testset_size
@@ -66,7 +66,6 @@ class ContextualTestset(BaseTestset):
         self.model_client = client
         self.embedding_model = embedding
         self.llm_generator_context = context
-        self.language = language
         self.max_allowed_tokens = max_tokens
         self.soglia_limite = soglia_limite
         self.pagine_da_estrarre = pagine_da_estrarre
@@ -185,7 +184,7 @@ class ContextualTestset(BaseTestset):
         generator = TestsetGenerator(
             llm=generator_llm,
             embedding_model=generator_embeddings,
-            llm_context=f"IMPORTANTISSIMO: Devi generare i nomi delle Personas, le descrizioni, gli scenari e le domande finali ESCLUSIVAMENTE in questa lingua: {lingua_scelta}."
+            llm_context=self.llm_generator_context
         )
 
         # Risultato
