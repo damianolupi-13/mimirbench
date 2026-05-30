@@ -37,7 +37,7 @@ EVAL_MODE = os.environ.get("MIMIR_EVAL_MODE")
 METRICS_PROVIDER = os.environ.get("MIMIR_METRICS_PROVIDER", "DEFAULT")
 TESTCASE_BUILDER = os.environ.get("MIMIR_TESTCASE_BUILDER", "DEFAULT")
 
-load_dotenv("../../api_key.env")
+load_dotenv("../../testdata/api_key.env")
 
 # ==========================================
 # METRICHE CUSTOM INTERNE (MIMIRBENCH CORE)

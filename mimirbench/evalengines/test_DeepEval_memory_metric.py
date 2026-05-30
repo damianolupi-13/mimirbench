@@ -20,7 +20,7 @@ os.environ["DEEPEVAL_PER_TASK_TIMEOUT_SECONDS_OVERRIDE"] = "600"
 from deepeval.test_case import ConversationalTestCase, Turn
 from deepeval.metrics import KnowledgeRetentionMetric
 
-load_dotenv("../../api_key.env")
+load_dotenv("../../testdata/api_key.env")
 os.environ["OPENAI_API_KEY"] = os.environ.get("API_KEY")
 
 CSV_FILE = "Risultati_Memoria_Mimir.csv"

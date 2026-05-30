@@ -3,7 +3,7 @@ import json
 from dotenv import load_dotenv
 from langfuse import Langfuse
 
-load_dotenv("../../langfusekeys.env")
+load_dotenv("../../testdata/langfusekeys.env")
 langfuse = Langfuse()
 
 # --- INSERISCI QUI IL TAG CORRETTO ---

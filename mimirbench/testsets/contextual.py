@@ -111,7 +111,15 @@ class ContextualTestset(BaseTestset):
         pd.set_option('display.max_colwidth', None)
         pd.set_option('display.max_rows', None)
 
-        self.output_csv = output_csv_path
+        target_path = Path(output_csv_path)
+        if target_path.suffix.lower() != '.csv':
+            target_path = target_path.with_suffix('.csv')
+
+        # Creazione della gerarchia di directory genitrici (se inesistente)
+        #target_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Assegnazione del path assoluto e validato
+        self.output_csv = str(target_path)
 
         #Implementazione metodo di estrazione e costruzione grafo per il testset di Ragas
         generator_llm = llm_factory(self.llm_model, client=self.model_client, max_tokens=self.max_allowed_tokens)

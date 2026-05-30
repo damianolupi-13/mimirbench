@@ -7,7 +7,7 @@ from langfuse import Langfuse
 from datetime import datetime
 
 # 1. Caricamento chiavi
-load_dotenv("langfusekeys.env")
+load_dotenv("testdata/langfusekeys.env")
 PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY")
 SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY")
 HOST = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")

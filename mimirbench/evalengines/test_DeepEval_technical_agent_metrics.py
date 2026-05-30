@@ -19,7 +19,7 @@ os.environ["DEEPEVAL_PER_TASK_TIMEOUT_SECONDS_OVERRIDE"] = "600"
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 from deepeval.metrics import GEval, BaseMetric
 
-load_dotenv("../../api_key.env")
+load_dotenv("../../testdata/api_key.env")
 os.environ["OPENAI_API_KEY"] = os.environ.get("API_KEY")
 
 CSV_FILE = "Risultati_Agent_Pytest.csv"
