@@ -100,6 +100,21 @@ class ContextualTestset(BaseTestset):
             #Eventualmente inserire un taglio del documento da versioni passati
             print(f"\n[i] File '{filepath}' ({len(nuovi_docs)} chunks) aggiunto")
 
+            if len(nuovi_docs) > self.soglia_limite:
+                print(f"\n[!] ALERT: Rilevati {len(nuovi_docs)} chunks. Il documento è molto denso.")
+
+                start_page = self.pagina_di_partenza
+
+                # La funzione min() assicura che se si supera la grandezza del PDF,
+                # l'end_page si fermerà all'ultima pagina reale del documento.
+                end_page = min(start_page + self.pagine_da_estrarre, len(nuovi_docs))
+
+                nuovi_docs = nuovi_docs[start_page:end_page]
+
+                print(f"[!] TAGLIO APPLICATO: Mantenute {len(nuovi_docs)} pagine (dalla {start_page} alla {end_page}).")
+            else:
+                print(f"\n[i] Documento di {len(nuovi_docs)} chunks: entro i limiti di sicurezza, elaboro il file completo.")
+
             # Accodiamo i docs nuovi all'insieme
             self.docs.extend(nuovi_docs)
             print(f"\nAccodamento completato. Chunks totali in memoria pronti per il testset: {len(self.docs)}")
@@ -188,7 +203,6 @@ class ContextualTestset(BaseTestset):
             print("\n>>> Documenti molto corti. Inserire documenti pù lunghi.")
 
         # Generator
-        lingua_scelta = self.language
         generator = TestsetGenerator(
             llm=generator_llm,
             embedding_model=generator_embeddings,
