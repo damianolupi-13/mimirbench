@@ -28,7 +28,8 @@ from dotenv import load_dotenv
 
 from deepeval.test_case import LLMTestCase, ConversationalTestCase, Turn
 from deepeval.metrics import (
-    BaseMetric, FaithfulnessMetric, AnswerRelevancyMetric, KnowledgeRetentionMetric
+    BaseMetric, FaithfulnessMetric, AnswerRelevancyMetric, ContextualRelevancyMetric,
+    KnowledgeRetentionMetric
 )
 
 JSON_PATH = os.environ.get("MIMIR_JSON_PATH")
@@ -136,7 +137,8 @@ def get_metrics():
     if EVAL_MODE == "RAG":
         return [
             FaithfulnessMetric(threshold=0.7, model="gpt-4o-mini", async_mode=True),
-            AnswerRelevancyMetric(threshold=0.7, model="gpt-4o-mini", async_mode=True)
+            AnswerRelevancyMetric(threshold=0.7, model="gpt-4o-mini", async_mode=True),
+            ContextualRelevancyMetric(threshold=0.4, model="gpt-4o-mini", async_mode=True)
         ]
     elif EVAL_MODE == "MEMORY":
         return [KnowledgeRetentionMetric(threshold=0.7, model="gpt-4o-mini", async_mode=True)]
