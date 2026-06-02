@@ -40,7 +40,7 @@ class BaseEvalEngine(ABC):
             cartella_corrente = os.path.dirname(os.path.abspath(__file__))
             self.test_script = os.path.join(cartella_corrente, "_hidden_pytest.py")
 
-    def run(self, eval_mode: str):
+    def run(self, eval_mode: str = None):
         # Clona l'ambiente per non inquinare il sistema globale
         custom_env = os.environ.copy()
 
