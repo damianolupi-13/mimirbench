@@ -192,6 +192,7 @@ def test_mimir_agent(item):
         nome_metrica = getattr(metric, "__name__", metric.__class__.__name__)
 
         results_to_save.append({
+            "Trace_ID": item.get("id_traccia", ""),
             "Input": str(item.get("input", ""))[:100],  # Tronca input lunghi per non intasare il CSV
             "Metrica": nome_metrica,
             "Punteggio": metric.score,

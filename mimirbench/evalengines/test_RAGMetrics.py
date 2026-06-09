@@ -102,6 +102,7 @@ def test_mimir_chatbot(item):
         real_status = "PASSED" if metric.score >= metric.threshold else "FAILED"
 
         results_to_save.append({
+            "Trace_ID": item.get("id_traccia", ""),
             "Input": item["input"][:100],
             "Metrica": metric.__class__.__name__,
             "Punteggio": metric.score,
