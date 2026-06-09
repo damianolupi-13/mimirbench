@@ -7,8 +7,7 @@ from .evalengines import (
 )
 from .testsets import (
     BaseTestset,
-    ContextualTestset,
-    MemoryTechnicalTestset
+    ContextualTestset
 )
 from .tracings import (
     BaseTraceExtractor,
@@ -17,7 +16,6 @@ from .tracings import (
     TechnicalTraceExtractor
 )
 #from .printers import Visualizer
-from .utils import eject_test_script
 
 # Esposizione totale
 __all__ = [
@@ -30,7 +28,6 @@ __all__ = [
     # Testset Classes
     "BaseTestset",
     "ContextualTestset",
-    "MemoryTechnicalTestset",
 
     # Tracing/Extractor Classes
     "BaseTraceExtractor",
@@ -40,6 +37,4 @@ __all__ = [
 
     # Visualization Tools
 
-    # Core Utilities
-    "eject_test_script"
 ]

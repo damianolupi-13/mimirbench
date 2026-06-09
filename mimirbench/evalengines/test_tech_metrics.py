@@ -4,38 +4,56 @@ import asyncio
 import time
 import pytest
 import pandas as pd
-from dotenv import load_dotenv
 
-# ==========================================
-# 1. SETUP AMBIENTE E TIMEOUT
-# ==========================================
-os.environ["CONFIDENT_METRIC_LOGGING_VERBOSE"] = "0"
-os.environ["DEEPEVAL_DISABLE_METRIC_LOGGING"] = "YES"
-os.environ["DEEPEVAL_TELEMETRY_OPT_OUT"] = "1"
-os.environ["CONFIDENT_API_KEY"] = "None"
-os.environ["DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"] = "300"
-os.environ["DEEPEVAL_PER_TASK_TIMEOUT_SECONDS_OVERRIDE"] = "600"
+config_path = os.path.join(os.path.dirname(__file__), "mimir_config.json")
+config_data = {}
 
-from deepeval.test_case import LLMTestCase, LLMTestCaseParams
+if os.path.exists(config_path):
+    with open(config_path, "r", encoding="utf-8") as f:
+        config_data.update(json.load(f))
+
+# Estraiamo provider e chiave dal file di configurazione
+provider = config_data.get("MIMIR_EVAL_PROVIDER", "openai").lower()
+chiave_salvata = config_data.get("MIMIR_EVAL_API_KEY", "")
+custom_model = config_data.get("MIMIR_EVAL_MODEL", "gpt-5-nano")
+
+# Smistamento dinamico della chiave API
+if chiave_salvata:
+    match provider:
+        case "openai":
+            os.environ["OPENAI_API_KEY"] = chiave_salvata
+        case "anthropic":
+            os.environ["ANTHROPIC_API_KEY"] = chiave_salvata
+        case "mistral":
+            os.environ["MISTRAL_API_KEY"] = chiave_salvata
+        case "google" | "gemini":
+            os.environ["GOOGLE_API_KEY"] = chiave_salvata
+        case "cohere":
+            os.environ["COHERE_API_KEY"] = chiave_salvata
+        case _:
+            print(f"[ATTENZIONE] Provider '{provider}' non riconosciuto. Chiave non impostata.")
+
+from deepeval.test_case import LLMTestCase
 from deepeval.metrics import GEval, BaseMetric
 
-load_dotenv("../../testdata/api_key.env")
-os.environ["OPENAI_API_KEY"] = os.environ.get("API_KEY")
+CSV_FILE = config_data.get("MIMIR_CSV_PATH", "Risultati_Agent_Fallback.csv")
+JSON_PATH = config_data.get("MIMIR_JSON_PATH", "")
+TOOL_DISPONIBILI_MIMIR = config_data.get("MIMIR_AVAILABLE_TOOLS", [])
 
-CSV_FILE = "Risultati_Agent_Pytest.csv"
+def carica_dati_test(filepath):
+    """Carica i dati in modo sicuro per il parametrize di Pytest."""
+    if not filepath or not os.path.exists(filepath):
+        return []
 
-# Pulizia automatica del file risultati precedente all'avvio dei test
+    with open(filepath, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+# Pulizia iniziale automatica
 if os.path.exists(CSV_FILE):
     try:
         os.remove(CSV_FILE)
-        print(f"\n🧹 [PULIZIA] File {CSV_FILE} rimosso.")
     except Exception:
         pass
-
-
-# ==========================================
-# 2. DEFINIZIONE METRICHE CUSTOM E DETERMINISTICHE
-# ==========================================
 
 class ToolHallucinationMetric(BaseMetric):
     def __init__(self, available_tools: list):
@@ -117,41 +135,27 @@ class TokenEfficiencyMetric(BaseMetric):
     def __name__(self):
         return "Token Efficiency"
 
-
-# ==========================================
-# 3. DEFINIZIONE METRICA AGENTICA (GEval)
-# ==========================================
-agentic_synthesis = GEval(
+"""agentic_synthesis = GEval(
     name="Agentic Synthesis",
-    criteria="""Valuta la risposta finale dell'agente seguendo queste due regole rigide:
+    criteria="Valuta la risposta finale dell'agente seguendo queste due regole rigide:
 1. SE il retrieval_context CONTIENE DATI (documenti RAG o risultati di tool): L'agente deve rispondere basandosi in modo logico e fedele ESCLUSIVAMENTE su quei dati. Non deve inventare informazioni tecniche o fattuali.
 2. SE il retrieval_context È VUOTO ([]): Significa che l'utente sta facendo "small talk", sta facendo domande generali, oppure sta continuando una conversazione precedente basandosi sulla memoria dell'agente. In questo caso, valuta SOLO se la risposta è sensata, educata e coerente con l'Input.
 IMPORTANTE: Se l'agente menziona nomi propri (es. il nome dell'utente) o dettagli di turni precedenti, ASSUMI CHE LI ABBIA RECUPERATI CORRETTAMENTE DALLA SUA MEMORIA. Non considerarli allucinazioni e non penalizzare l'agente.
-IMPORTANTE: È normale e accettabile che l'agente ricordi all'utente il proprio scopo (es. menzionare documenti o il suo nome) anche durante i saluti. Non penalizzare tali introduzioni.""",
+IMPORTANTE: È normale e accettabile che l'agente ricordi all'utente il proprio scopo (es. menzionare documenti o il suo nome) anche durante i saluti. Non penalizzare tali introduzioni.",
     evaluation_params=[LLMTestCaseParams.INPUT, LLMTestCaseParams.ACTUAL_OUTPUT, LLMTestCaseParams.RETRIEVAL_CONTEXT],
-    model="gpt-4o",
+    model="gpt-5-nano",
     threshold=0.7,
     async_mode=True
-)
-
-# --- LISTA DEI TOOL REALI DI MIMIR ---
-TOOL_DISPONIBILI_MIMIR = [
-    "hybrid_document_retriever_tool",
-    # Aggiungi qui eventuali altri tool futuri
-]
+)"""
 
 # Inizializziamo le metriche con le relative soglie calibrate
 tool_hallucination = ToolHallucinationMetric(available_tools=TOOL_DISPONIBILI_MIMIR)
 latenza = LatencyMetric(max_seconds=15.0)
 token_usage = TokenEfficiencyMetric(max_tokens=25000)
 
-lista_metriche = [agentic_synthesis, tool_hallucination, latenza, token_usage]
+lista_metriche = [tool_hallucination, latenza, token_usage]
 
-
-# ==========================================
-# 4. CICLO DI TEST PYTEST
-# ==========================================
-@pytest.mark.parametrize("item", json.load(open("tracce_agente.json", "r", encoding="utf-8")))
+@pytest.mark.parametrize("item", carica_dati_test(JSON_PATH))
 def test_mimir_agent(item):
     # Prepariamo la risposta del tool. DeepEval vuole il retrieval_context come lista di stringhe.
     risposta_tool = item.get("risposta_del_tool", "")
@@ -169,7 +173,7 @@ def test_mimir_agent(item):
         }
     )
 
-    # --- ESECUZIONE PARALLELA ---
+    #ESECUZIONE PARALLELA
     start_time = time.perf_counter()
 
     async def run_metrics():
@@ -181,7 +185,7 @@ def test_mimir_agent(item):
     end_time = time.perf_counter()
     duration = round(end_time - start_time, 2)
 
-    # --- RACCOLTA E SALVATAGGIO RISULTATI ---
+    # RACCOLTA E SALVATAGGIO RISULTATI
     results_to_save = []
     for metric in lista_metriche:
         real_status = "PASSED" if metric.score >= metric.threshold else "FAILED"
@@ -199,7 +203,6 @@ def test_mimir_agent(item):
 
     df = pd.DataFrame(results_to_save)
 
-    # Sistema di retry sicuro per il salvataggio concorrente (utile con pytest-xdist)
     for attempt in range(20):
         try:
             header = not os.path.exists(CSV_FILE)

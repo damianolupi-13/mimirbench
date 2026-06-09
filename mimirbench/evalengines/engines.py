@@ -13,73 +13,186 @@
 # limitations under the License.
 
 import os
+import json
 import subprocess
-from abc import ABC
+from abc import ABC, abstractmethod
 
 
 class BaseEvalEngine(ABC):
     """
-    Motore base per le valutazioni. Prepara l'ambiente isolato e lancia lo script Pytest.
-    Supporta l'estensione tramite provider di metriche e builder di Test Case personalizzati.
+    Motore base astratto per le valutazioni di Mimir.
+    Fornisce la configurazione di base dell'ambiente, ma delega
+    l'esecuzione effettiva alle implementazioni specifiche.
     """
 
-    def __init__(self, json_dati_path: str, output_csv_path: str,
-                 metrics_provider: str = None,
-                 testcase_builder: str = None,
-                 custom_test_script: str = None):
+    def __init__(self, json_dati_path: str = "", output_csv_path: str = "", parallel_launches: int = 1, provider: str = "openai",
+                 model: str = "gpt-5-nano"):
+            # Convertiamo i path in percorsi ASSOLUTI basati su dove viene lanciato lo script principale
+            self.json_dati_path = os.path.abspath(json_dati_path) if json_dati_path else ""
+            self.output_csv_path = os.path.abspath(output_csv_path) if output_csv_path else ""
+            self.parallel_launches = parallel_launches
+            self.provider = provider.lower()
+            self.model = model
+            self.test_path = None
 
-        self.json_dati = json_dati_path
-        self.output_csv = output_csv_path
-        self.metrics_provider = metrics_provider or "DEFAULT"
-        self.testcase_builder = testcase_builder or "DEFAULT"
-
-        # Gestione della Botola (Escape Hatch)
-        if custom_test_script and os.path.exists(custom_test_script):
-            self.test_script = custom_test_script
-        else:
-            cartella_corrente = os.path.dirname(os.path.abspath(__file__))
-            self.test_script = os.path.join(cartella_corrente, "test_hidden_pytest.py")
-
-    def run(self, eval_mode: str = None):
-        # Clona l'ambiente per non inquinare il sistema globale
+    def _get_base_env(self) -> dict:
+        """
+        Fornisce il dizionario con le variabili d'ambiente clonate e
+        configurate per disabilitare telemetria e login di DeepEval.
+        """
         custom_env = os.environ.copy()
 
-        # Disabilita telemetria e login forzato di DeepEval
+        # --- GESTIONE GENERICA AMBIENTE ---
+        print("\n=== CONFIGURAZIONE AMBIENTE MIMIR ===")
+        print(f"Provider Giudice Selezionato: {self.provider.upper()}")
+        print(f"API_KEY Globale impostata: {'API_KEY' in custom_env}")
+        print("=====================================")
+
+        custom_env = os.environ.copy()
         custom_env["CONFIDENT_METRIC_LOGGING_VERBOSE"] = "0"
         custom_env["DEEPEVAL_DISABLE_METRIC_LOGGING"] = "YES"
         custom_env["DEEPEVAL_TELEMETRY_OPT_OUT"] = "1"
         custom_env["CONFIDENT_API_KEY"] = "None"
         custom_env["DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"] = "300"
+        custom_env["DEEPEVAL_PER_TASK_TIMEOUT_SECONDS_OVERRIDE"] = "600"
 
-        # Passa le configurazioni al subprocess
-        custom_env["MIMIR_JSON_PATH"] = self.json_dati
-        custom_env["MIMIR_CSV_PATH"] = self.output_csv
-        custom_env["MIMIR_EVAL_MODE"] = eval_mode
-        custom_env["MIMIR_METRICS_PROVIDER"] = self.metrics_provider
-        custom_env["MIMIR_TESTCASE_BUILDER"] = self.testcase_builder
+        return custom_env
 
-        if os.path.exists(self.output_csv):
-            try:
-                os.remove(self.output_csv)
-            except Exception:
-                pass
-
-        # Lancio del processo isolato
-        subprocess.run(["deepeval", "test", "run", self.test_script], text=True, env=custom_env)
+    @abstractmethod
+    def run(self):
+        """
+        Metodo astratto. Ogni Engine DEVE implementare questo metodo
+        per definire come lanciare il proprio specifico file di test.
+        """
+        pass
 
 
-# --- CLASSI PUBBLICHE (Batteries Included) ---
+# --- CLASSI PUBBLICHE (Implementazioni degli Engine) ---
 
 class RagEvalEngine(BaseEvalEngine):
-    def run_evaluations(self):
-        self.run(eval_mode="RAG")
+    """Motore dedicato alle metriche RAG tradizionali"""
 
+    def __init__(self, json_dati_path: str = "", output_csv_path: str = "", parallel_launches: int = 5, provider: str = "openai",
+                 model: str = "gpt-5-nano"):
+        super().__init__(json_dati_path, output_csv_path, parallel_launches, provider, model)
+        self.test_path = "test_RAGMetrics.py"
+
+    def run(self):
+        cartella_corrente = os.path.dirname(os.path.abspath(__file__))
+        script_path = os.path.join(cartella_corrente, self.test_path)
+        config_path = os.path.join(cartella_corrente, "mimir_config.json")
+
+        if not os.path.exists(script_path):
+            raise FileNotFoundError(f"\n[ERRORE MIMIR ENGINE] Script di test non trovato: {script_path}")
+
+        print(f"\n[MIMIR ENGINE] Avvio RagEvalEngine sul file: {self.test_path}")
+
+        api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("API_KEY", "")
+
+        config_data = {
+            "MIMIR_JSON_PATH": self.json_dati_path,
+            "MIMIR_CSV_PATH": self.output_csv_path,
+            "MIMIR_EVAL_PROVIDER": self.provider,
+            "MIMIR_EVAL_MODEL": self.model,
+            "MIMIR_EVAL_API_KEY": api_key
+        }
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config_data, f, indent=4)
+
+        comando = ["deepeval", "test", "run", script_path]
+        if self.parallel_launches > 1:
+            comando.extend(["-n", str(self.parallel_launches)])
+
+        print(f"\n[MIMIR ENGINE] Esecuzione PARALLELA attivata: {self.parallel_launches} worker")
+
+        # Il comando più normale e pulito possibile
+        try:
+            subprocess.run(comando, text=True, env=self._get_base_env(), cwd=cartella_corrente)
+        finally:
+            if os.path.exists(config_path):
+                os.remove(config_path)
 
 class AgentEvalEngine(BaseEvalEngine):
-    def run_evaluations(self):
-        self.run(eval_mode="AGENT")
+    """Motore dedicato alle performance tecniche e di ragionamento degli agenti AI"""
+    def __init__(self, json_dati_path: str = "", output_csv_path: str = "", parallel_launches: int = 1, tool_list: list = None,
+                 provider: str = "openai", model: str = "gpt-5-nano"):
+        super().__init__(json_dati_path, output_csv_path, parallel_launches, provider, model)
+        self.test_path = "test_tech_metrics.py"
+        self.tool_list = tool_list if tool_list is not None else []
+
+    def run(self):
+        cartella_corrente = os.path.dirname(os.path.abspath(__file__))
+        script_path = os.path.join(cartella_corrente, self.test_path)
+        config_path = os.path.join(cartella_corrente, "mimir_config.json")
+
+        if not os.path.exists(script_path):
+            raise FileNotFoundError(f"\n[ERRORE MIMIR ENGINE] Script di test non trovato: {script_path}")
+
+        print(f"\n[MIMIR ENGINE] Avvio AgentEvalEngine sul file: {self.test_path}")
+
+        api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("API_KEY", "")
+
+        config_data = {
+            "MIMIR_JSON_PATH": self.json_dati_path,
+            "MIMIR_CSV_PATH": self.output_csv_path,
+            "MIMIR_AVAILABLE_TOOLS": self.tool_list,
+            "MIMIR_EVAL_PROVIDER": self.provider,
+            "MIMIR_EVAL_MODEL": self.model,
+            "MIMIR_EVAL_API_KEY": api_key
+        }
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config_data, f, indent=4)
+
+        comando = ["deepeval", "test", "run", script_path]
+        if self.parallel_launches > 1:
+            comando.extend(["-n", str(self.parallel_launches)])
+
+        print(f"\n[MIMIR ENGINE] Esecuzione PARALLELA attivata: {self.parallel_launches} worker")
+
+        try:
+            subprocess.run(comando, text=True, env=self._get_base_env(), cwd=cartella_corrente)
+        finally:
+            if os.path.exists(config_path):
+                os.remove(config_path)
 
 
 class MemoryEvalEngine(BaseEvalEngine):
-    def run_evaluations(self):
-        self.run(eval_mode="MEMORY")
+    """Motore dedicato alla validazione della Knowledge Retention"""
+    def __init__(self, json_dati_path: str = "", output_csv_path: str = "", parallel_launches: int = 1, provider: str = "openai",
+                 model: str = "gpt-5-nano"):
+        super().__init__(json_dati_path, output_csv_path, parallel_launches, provider, model)
+        self.test_path = "test_memory_metric.py"
+
+    def run(self):
+        cartella_corrente = os.path.dirname(os.path.abspath(__file__))
+        script_path = os.path.join(cartella_corrente, self.test_path)
+        config_path = os.path.join(cartella_corrente, "mimir_config.json")
+
+        if not os.path.exists(script_path):
+            raise FileNotFoundError(f"\n[ERRORE MIMIR ENGINE] Script di test non trovato: {script_path}")
+
+        print(f"\n[MIMIR ENGINE] Avvio MemoryEvalEngine sul file: {self.test_path}")
+
+        api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("API_KEY", "")
+
+        config_data = {
+            "MIMIR_JSON_PATH": self.json_dati_path,
+            "MIMIR_CSV_PATH": self.output_csv_path,
+            "MIMIR_EVAL_PROVIDER": self.provider,
+            "MIMIR_EVAL_MODEL": self.model,
+            "MIMIR_EVAL_API_KEY": api_key
+        }
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config_data, f, indent=4)
+
+        comando = ["deepeval", "test", "run", script_path]
+        if self.parallel_launches > 1:
+            comando.extend(["-n", str(self.parallel_launches)])
+
+        print(f"\n[MIMIR ENGINE] Esecuzione PARALLELA attivata: {self.parallel_launches} worker")
+
+        try:
+            subprocess.run(comando, text=True, env=self._get_base_env(), cwd=cartella_corrente)
+        finally:
+            if os.path.exists(config_path):
+                os.remove(config_path)

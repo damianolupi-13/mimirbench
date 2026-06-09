@@ -1,5 +1,3 @@
-#Implementare classe BaseTraceExtractor astratta estendibile
-
 # Copyright 2026 Damiano Lupi (https://github.com/damianolupi-13)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from langfuse import Langfuse
 from abc import ABC, abstractmethod
 
 class BaseTraceExtractor(ABC):
@@ -26,8 +23,8 @@ class BaseTraceExtractor(ABC):
     """
 
     #Costruttore con tag delle traces da cercare
-    def __init__(self):
-        self.langfuse_instance = Langfuse()
+    def __init__(self, langfuse_instance):
+        self.langfuse_instance = langfuse_instance
 
     #Metodo astratto per il recupero di informazioni necessarie (se serve)
     @abstractmethod

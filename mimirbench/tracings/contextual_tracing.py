@@ -1,5 +1,3 @@
-#Implementare classe ContextualTraceExtractor
-
 # Copyright 2026 Damiano Lupi (https://github.com/damianolupi-13)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,6 +13,7 @@
 # limitations under the License.
 
 import json
+import time
 from mimirbench.tracings.base_tracing import BaseTraceExtractor
 
 class ContextualTraceExtractor(BaseTraceExtractor):
@@ -22,8 +21,8 @@ class ContextualTraceExtractor(BaseTraceExtractor):
         Classe per scaricare e usare le traces Langfuse riferite alla valutazione contestuale dell'agente
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, langfuse_instance):
+        super().__init__(langfuse_instance)
 
     def fetching(self, trace_output):
         """Estrae il testo se è una risposta finale (messaggio AI senza tool calls)"""
@@ -44,7 +43,21 @@ class ContextualTraceExtractor(BaseTraceExtractor):
         print("ESTRAZIONE DIRETTA da Langfuse...\n")
         dati_estratti = []  # Lista che conterrà i dizionari da salvare in JSON
         try:
-            res = self.langfuse_instance.api.trace.list(limit=100, tags=["env:test"])
+            res = None
+
+            # --- CONTROLLO RICERCA INIZIALE ---
+            for tentativo in range(3):
+                try:
+                    res = self.langfuse_instance.api.trace.list(limit=100, tags=["env:test"])
+                    break
+                except Exception as err:
+                    print(f"    [!] Timeout ricerca lista (Tentativo {tentativo + 1}/3). Ritento...")
+                    time.sleep(3)
+
+            if not res:
+                print("ERRORE CRITICO: Impossibile contattare Langfuse per la lista iniziale.")
+                return None
+            # ------------------------------------------------
 
             if not res.data:
                 print("Nessuna traccia trovata con il tag env:test.")
@@ -62,7 +75,24 @@ class ContextualTraceExtractor(BaseTraceExtractor):
             print(f"Trovate {len(tracce_test)} tracce relative a questo test...\n")
 
             for i, t_info in enumerate(tracce_test):
-                trace = self.langfuse_instance.api.trace.get(t_info.id) #Prendiamo la singola traccia
+                trace = None
+
+                # --- CONTROLLO SINGOLA TRACCIA ---
+                for tentativo in range(3):
+                    try:
+                        trace = self.langfuse_instance.api.trace.get(t_info.id)  # Prendiamo la singola traccia
+                        break
+                    except Exception as err:
+                        print(
+                            f"    [!] Timeout su traccia {t_info.id} (Tentativo {tentativo + 1}/3). Ritento... Dettaglio: {err}")
+                        time.sleep(3)
+
+                if not trace:
+                    print(f"    [!] Salto definitivamente la traccia {t_info.id}: i dati sono irraggiungibili.")
+                    continue
+
+                time.sleep(0.5)  # timeout per il server langfuse
+                # -----------------------------------------------
 
                 faldone_documenti = []
                 risposta_finale = ""
@@ -85,7 +115,7 @@ class ContextualTraceExtractor(BaseTraceExtractor):
                                     if m.get("type") == "human":
                                         domanda_utente = m.get("content")
                                         break
-                            break  # Trovato l'ultimo, possiamo passare alla prossima traccia
+                            break  # Trovato l'ultimo obs react_agent, possiamo passare alla prossima traccia
 
                 # --- OUTPUT ---
                 print(f"==================== TRACCIA {i + 1} ====================")

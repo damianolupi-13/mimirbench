@@ -1,5 +1,3 @@
-#Implementare TechnicalTraceExtractor
-
 # Copyright 2026 Damiano Lupi (https://github.com/damianolupi-13)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,25 +13,42 @@
 # limitations under the License.
 
 import json
+import time
 from mimirbench.tracings.base_tracing import BaseTraceExtractor
+
 
 class TechnicalTraceExtractor(BaseTraceExtractor):
     """
         Classe per scaricare e usare le traces Langfuse riferite alla valutazione tecnica dell'agente
     """
-    def __init__(self):
-        super().__init__()
+
+    def __init__(self, langfuse_instance):
+        super().__init__(langfuse_instance)
 
     # Metodo per il fetching di determinate caratteristiche dell'output non serve
-    def fetching(self,  trace_output):
+    def fetching(self, trace_output):
         return None
 
     def extracting(self, output_json_path: str, test_id: str):
-        print("🚀 ESTRAZIONE DATI AGENTE da Langfuse...\n")
+        print("ESTRAZIONE DATI AGENTE da Langfuse...\n")
         dati_estratti = []
 
         try:
-            res = self.langfuse_instance.api.trace.list(limit=100, tags=["env:test"])
+            res = None
+
+            # --- CONTROLLO RICERCA INIZIALE ---
+            for tentativo in range(3):
+                try:
+                    res = self.langfuse_instance.api.trace.list(limit=100, tags=["env:test"])
+                    break
+                except Exception as err:
+                    print(f"    [!] Timeout ricerca lista (Tentativo {tentativo + 1}/3). Ritento...")
+                    time.sleep(3)
+
+            if not res:
+                print("ERRORE CRITICO: Impossibile contattare Langfuse per la lista iniziale.")
+                return None
+            # ------------------------------------------------
 
             if not res.data:
                 print("Nessuna traccia trovata con il tag env:test.")
@@ -50,8 +65,28 @@ class TechnicalTraceExtractor(BaseTraceExtractor):
 
             print(f"Trovate {len(tracce_test)} tracce relative a questo test...\n")
 
+            # Analizziamo tutte le tracce in sequenza
             for i, t_info in enumerate(tracce_test):
-                trace = self.langfuse_instance.api.trace.get(t_info.id)
+                trace = None
+                osservazioni = []
+
+                # --- CONTROLLO SINGOLA TRACCIA ---
+                for tentativo in range(3):
+                    try:
+                        trace = self.langfuse_instance.api.trace.get(t_info.id)
+                        osservazioni = sorted(trace.observations, key=lambda x: getattr(x, 'start_time', 0))
+                        break
+                    except Exception as err:
+                        print(
+                            f"    [!] Timeout su traccia {t_info.id} (Tentativo {tentativo + 1}/3). Ritento... Dettaglio: {err}")
+                        time.sleep(3)
+
+                if not trace or not osservazioni:
+                    print(f"    [!] Salto definitivamente la traccia {t_info.id}: i dati sono irraggiungibili.")
+                    continue
+
+                time.sleep(0.5)  # timeout per il server langfuse
+                # -----------------------------------------------
 
                 domanda_utente = ""
                 risposta_finale = ""
@@ -60,24 +95,17 @@ class TechnicalTraceExtractor(BaseTraceExtractor):
 
                 # Metriche Tecniche
                 latenza_sec = getattr(trace, "latency", 0)
-                total_tokens = 0  # Inizializziamo a 0, lo calcoleremo noi
-
-                # Ordinamento cronologico delle osservazioni della traccia analizzata dalla più vecchia alla più nuova
-                osservazioni = sorted(trace.observations, key=lambda x: getattr(x, 'start_time', 0))
+                total_tokens = 0
 
                 for obs in osservazioni:
                     # --- CALCOLO TOKEN (Dal nodo ChatVertexAI) ---
-                    # Identifichiamo il nodo che fa la chiamata LLM (come dal tuo screenshot)
                     if obs.name == "ChatVertexAI" or getattr(obs, "type", "") == "GENERATION":
                         uso = getattr(obs, "usage", None)
                         if uso:
-                            # Metodo corazzato: controlliamo sia come oggetto che come dizionario
                             if isinstance(uso, dict):
-                                # Cerca tutte le varianti note
                                 total_tokens += uso.get("total", 0) or uso.get("total_tokens", 0) or uso.get(
                                     "totalTokens", 0)
                             else:
-                                # Se è un oggetto (standard SDK Langfuse)
                                 if hasattr(uso, "total") and uso.total:
                                     total_tokens += uso.total
                                 elif hasattr(uso, "total_tokens") and uso.total_tokens:
@@ -111,7 +139,7 @@ class TechnicalTraceExtractor(BaseTraceExtractor):
                                 if not msg.get("tool_calls") and not msg.get("additional_kwargs", {}).get("tool_calls"):
                                     risposta_finale = msg.get("content")
 
-                # --- STAMPA A SCHERMO PER DEBUG ---
+                # --- STAMPA A SCHERMO ---
                 print(f"==================== TRACCIA {i + 1} ====================")
                 print(f"DOMANDA: {domanda_utente}")
                 print(f"TOOL SCELTO: {tool_chiamato}")
@@ -135,10 +163,10 @@ class TechnicalTraceExtractor(BaseTraceExtractor):
                     dati_estratti.append(traccia_data)
 
             # --- SALVATAGGIO SU FILE ---
-            with open("tracce_agente.json", "w", encoding="utf-8") as f:
+            with open(output_json_path, "w", encoding="utf-8") as f:
                 json.dump(dati_estratti, f, indent=4, ensure_ascii=False)
 
-            print(f"\nEstrazione completata {len(dati_estratti)} tracce salvate in 'tracce_agente.json'.")
+            print(f"\nEstrazione completata. {len(dati_estratti)} tracce salvate in '{output_json_path}'.")
 
         except Exception as e:
             print(f"ERRORE DURANTE L'ESTRAZIONE: {e}")

@@ -1,5 +1,3 @@
-#Implementare classe testset modulo contestuale
-
 # Copyright 2026 Damiano Lupi (https://github.com/damianolupi-13)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +19,7 @@
 
 import pandas as pd
 from pathlib import Path
+from langchain_core.documents import Document
 from langchain_community.document_loaders import PyPDFLoader, TextLoader, UnstructuredWordDocumentLoader, UnstructuredMarkdownLoader
 
 # Import necessari Ragas
@@ -56,7 +55,21 @@ class ContextualTestset(BaseTestset):
         e prepararli per la generazione testset di RAGAS.
 
         Args:
-            spiegare gli argomenti
+            testset_size (int): Il numero totale di domande/casi di test che RAGAS dovrà generare
+            model (str): Il nome o l'ID del modello LLM da utilizzare per la generazione (es. "gpt-4o", "gpt-5-nano")
+            client (Any): L'istanza del client API per connettersi al modello linguistico (es. l'oggetto restituito da `AsyncOpenAI()`)
+            embedding (str): Il nome o l'ID del modello di embedding da utilizzare per la vettorializzazione dei chunk (es. "text-embedding-3-small")
+            context (str): Le direttive di sistema (system prompt) fornite al generatore.
+                           Utile per forzare la lingua dell'output e impostare regole restrittive
+                           sulla struttura delle domande
+            max_tokens (int, opzionale): Il limite massimo di token gestibili dal modello LLM per una singola richiesta. Default: 8192
+            soglia_limite (int, opzionale): La soglia massima di chunk/pagine tollerata in memoria.
+                                            Se il documento caricato supera questo limite, viene
+                                            attivato un meccanismo di sicurezza (taglio). Default: 100
+            pagine_da_estrarre (int, opzionale): Se viene superata la `soglia_limite`, indica la quantità
+                                                 di chunk/pagine da mantenere dopo il taglio. Default: 100
+            pagina_di_partenza (int, opzionale): L'indice della pagina o del chunk da cui far partire
+                                                 il taglio di sicurezza. Default: 1.
     """
     def __init__(self, testset_size: int, model: str, client, embedding: str, context: str, max_tokens = 8192,
                  soglia_limite=100, pagine_da_estrarre=100, pagina_di_partenza=1):
@@ -94,10 +107,39 @@ class ContextualTestset(BaseTestset):
                 case ".md":
                     loader = UnstructuredMarkdownLoader(filepath)
                     nuovi_docs = loader.load()
+
+                # --- PARSING TABELLARE PER RAGAS ---
+                case ".csv" | ".xlsx":
+                    # 1. Lettura in DataFrame
+                    if extension == ".csv":
+                        df = pd.read_csv(filepath)
+                    else:
+                        df = pd.read_excel(filepath, engine="openpyxl")
+
+                    documenti_tabellari = []
+
+                    # Serializzazione semantica per il Node Parser di RAGAS
+                    righe_per_doc = 10  # Raggruppa 10 righe per doc
+                    for i in range(0, len(df), righe_per_doc):
+                        batch = df.iloc[i: i + righe_per_doc]
+                        # Serializziamo il batch di 10 righe
+                        testo_batch = ""
+                        for indice, riga in batch.iterrows():
+                            testo_riga = "; ".join([f"{col}: {val}" for col, val in riga.items() if pd.notna(val)])
+                            testo_batch += f"Record {indice}: {testo_riga}\n"
+
+                        # Istanziazione dell'oggetto Document supportato da RAGAS
+                        doc = Document(
+                            page_content=testo_batch,
+                            metadata={"source": filepath, "row_index": i}
+                        )
+                        documenti_tabellari.append(doc)
+
+                    nuovi_docs = documenti_tabellari
+                    print(f"Tabella caricata: serializzate {len(nuovi_docs)} righe")
                 case _:
                     raise ValueError(f"Formato file non supportato: {extension}")
 
-            #Eventualmente inserire un taglio del documento da versioni passati
             print(f"\n[i] File '{filepath}' ({len(nuovi_docs)} chunks) aggiunto")
 
             if len(nuovi_docs) > self.soglia_limite:
@@ -105,15 +147,15 @@ class ContextualTestset(BaseTestset):
 
                 start_page = self.pagina_di_partenza
 
-                # La funzione min() assicura che se si supera la grandezza del PDF,
-                # l'end_page si fermerà all'ultima pagina reale del documento.
+                # La funzione min() assicura che se si supera la grandezza del documento,
+                # l'end_page si fermerà all'ultima pagina reale di quest'ultimo
                 end_page = min(start_page + self.pagine_da_estrarre, len(nuovi_docs))
 
                 nuovi_docs = nuovi_docs[start_page:end_page]
 
-                print(f"[!] TAGLIO APPLICATO: Mantenute {len(nuovi_docs)} pagine (dalla {start_page} alla {end_page}).")
+                print(f"[!] TAGLIO APPLICATO: Mantenuti {len(nuovi_docs)} chunks (da {start_page} a {end_page}).")
             else:
-                print(f"\n[i] Documento di {len(nuovi_docs)} chunks: entro i limiti di sicurezza, elaboro il file completo.")
+                print(f"\n[i] Documento completo in elaborazione.")
 
             # Accodiamo i docs nuovi all'insieme
             self.docs.extend(nuovi_docs)
@@ -130,23 +172,20 @@ class ContextualTestset(BaseTestset):
         if target_path.suffix.lower() != '.csv':
             target_path = target_path.with_suffix('.csv')
 
-        # Creazione della gerarchia di directory genitrici (se inesistente)
-        #target_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Assegnazione del path assoluto e validato
+        # Assegnazione del path
         self.output_csv = str(target_path)
 
         #Implementazione metodo di estrazione e costruzione grafo per il testset di Ragas
         generator_llm = llm_factory(self.llm_model, client=self.model_client, max_tokens=self.max_allowed_tokens)
         generator_embeddings = OpenAIEmbeddings(client=self.model_client, model=self.embedding_model)
 
-        # --- FUNZIONI DI FILTRO PER I COMPONENTI "LOCALI" ---
+        # --- FUNZIONI DI FILTRO ---
         #Contiamo e facciamo la media dei tipi di chunks estratti dai documenti (in base al conteggio dei token)
         counts = [num_tokens_from_string(doc.page_content) for doc in self.docs]
         pct_long = sum(1 for c in counts if c > 500) / len(self.docs)
         pct_med = sum(1 for c in counts if 101 <= c <= 500) / len(self.docs)
 
-        # Funzioni di filtro per smistare il traffico
+        # Funzioni di filtro per smistare i docs
         def filter_doc_long(n):
             return n.type == NodeType.DOCUMENT and num_tokens_from_string(n.properties.get("page_content", "")) > 500
 
@@ -156,12 +195,12 @@ class ContextualTestset(BaseTestset):
         def filter_chunks(n):
             return n.type == NodeType.CHUNK
 
-        # 3. LOGICA DINAMICA (Replicata dal default_transforms di Ragas)
+        # LOGICA DINAMICA (Replicata dal default_transforms di Ragas)
         custom_transforms = []
 
-        # --- BIVIO LOGICO --- Costruzione dei transforms per il grafo di Ragas, a seconda della lunghezza dei chunks del documento
+        # Costruzione dei transforms per il grafo di Ragas, a seconda della lunghezza dei chunks del documento
         if pct_long >= 0.25:
-            print(f"\n>>> Rilevati DOCUMENTI LUNGHI ({pct_long:.0%}). Applico Splitter.")
+            print(f"\n>>> Rilevati DOCUMENTI LUNGHI ({pct_long:.0%}).")
             custom_transforms = [
                 HeadlinesExtractor(llm=generator_llm, filter_nodes=filter_doc_long),
                 # FIX: Non crasha se mancano le headlines
@@ -211,7 +250,7 @@ class ContextualTestset(BaseTestset):
 
         # Risultato
         print("\nAvvio generazione...")
-        # Passiamo 'transforms=custom_transforms' per attivare tutto
+        # Passiamo 'transforms=custom_transforms' per attivare la generazione
         dataset = generator.generate_with_langchain_docs(
             self.docs,
             testset_size=self.testset_size,

@@ -1,5 +1,3 @@
-#Implementare classe BaseTestset astratta estendibile
-
 # Copyright 2026 Damiano Lupi (https://github.com/damianolupi-13)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");

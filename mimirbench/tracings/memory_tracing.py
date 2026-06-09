@@ -1,5 +1,3 @@
-#Implementare classe MemoryTraceExtractor
-
 # Copyright 2026 Damiano Lupi (https://github.com/damianolupi-13)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,8 +20,8 @@ class MemoryTraceExtractor(BaseTraceExtractor):
         Classe per scaricare e usare le traces Langfuse riferite alla valutazione mnemonica dell'agente
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, langfuse_instance):
+        super().__init__(langfuse_instance)
 
     def fetching(self, trace_output):
         """
@@ -66,8 +64,22 @@ class MemoryTraceExtractor(BaseTraceExtractor):
         print("ESTRAZIONE CONVERSAZIONE COMPLETA da Langfuse...\n")
 
         try:
+            import time
+            res = None
             # Recuperiamo tutte le tracce con il tag
-            res = self.langfuse_instance.api.trace.list(limit=100, tags=["env:test"])
+            # --- CONTROLLO RICERCA INIZIALE ---
+            for tentativo in range(3):
+                try:
+                    # limit = 50, ci interessa trovare UNA traccia sola
+                    res = self.langfuse_instance.api.trace.list(limit=50, tags=["env:test"])
+                    break
+                except Exception as err:
+                    print(f"    [!] Timeout ricerca lista (Tentativo {tentativo + 1}/3). Ritento...")
+                    time.sleep(3)
+
+            if not res:
+                print("ERRORE CRITICO: Impossibile contattare Langfuse per la lista iniziale.")
+                return None
 
             if not res.data:
                 print("Nessuna traccia trovata con il tag env:test.")
@@ -84,60 +96,78 @@ class MemoryTraceExtractor(BaseTraceExtractor):
 
             print(f"Trovate {len(tracce_test)} tracce totali. Cerco la conversazione più lunga e recente...\n")
 
+            # Invece di ordinare dalla più vecchia alla più nuova,
+            # usiamo reverse=True per avere la PIÙ RECENTE in posizione 0
+            tracce_ordinate = sorted(tracce_test, key=lambda x: getattr(x, 'timestamp', 0), reverse=True)
+
             conversazione_migliore = None
-            max_turni_trovati = 0
 
-            # Ordiniamo le tracce dalla più VECCHIA alla più NUOVA
-            # Così se usiamo il ">=", la più recente sovrascriverà quella vecchia a parità di turni
-            tracce_ordinate = sorted(tracce_test, key=lambda x: getattr(x, 'timestamp', 0))
-
-            # 3. Analizziamo TUTTE le tracce in ordine cronologico
+            # Analizziamo partendo dall'ultima conversazione fatta
             for t_info in tracce_ordinate:
-                trace = self.langfuse_instance.api.trace.get(t_info.id)
-                turni_della_traccia = []
+                import time
+                trace = None
+                osservazioni = []
 
-                # Ordiniamo le observation della traccia dalla più vecchia alla più nuova e prendiamo i react_agent
-                osservazioni = sorted(trace.observations, key=lambda x: getattr(x, 'start_time', 0))
+                print(f" -> Verifico la traccia {t_info.id}...")
+
+                # --- CONTROLLO SINGOLA TRACCIA ---
+                for tentativo in range(3):
+                    try:
+                        trace = self.langfuse_instance.api.trace.get(t_info.id)
+                        osservazioni = sorted(trace.observations, key=lambda x: getattr(x, 'start_time', 0))
+                        break
+                    except Exception as err:
+                        print(f"    [!] Timeout (Tentativo {tentativo + 1}/3). Ritento... {err}")
+                        time.sleep(3)
+
+                if not trace or not osservazioni:
+                    print(f"    [!] Traccia {t_info.id} illeggibile, passo alla precedente.")
+                    continue
+                # -------------------------
+
+                turni_della_traccia = []
                 nodi_react_agent = [obs for obs in osservazioni if obs.name == "react_agent"]
 
                 if nodi_react_agent:
-                    # Prendiamo solo l'ultimo passaggio nel react_agent per evitare chiamate ai tools
                     ultimo_obs = nodi_react_agent[-1]
                     tutti_i_messaggi = []
 
-                    # L'ultimo nodo contiene lo storico della chat in "input" e la risposta finale in "output"
-                    # Inseriamo tutto in una lista cronologica senza doppioni, dove ogni messaggio è un dict
                     if ultimo_obs.input and isinstance(ultimo_obs.input, dict) and "messages" in ultimo_obs.input:
                         tutti_i_messaggi.extend(ultimo_obs.input["messages"])
-
                     if ultimo_obs.output and isinstance(ultimo_obs.output, dict) and "messages" in ultimo_obs.output:
                         for m in ultimo_obs.output["messages"]:
                             if m not in tutti_i_messaggi:
                                 tutti_i_messaggi.append(m)
 
-                    # Ricostruiamo le coppie domanda/risposta con il fetching
                     domanda_tmp = ""
                     for msg in tutti_i_messaggi:
                         ruolo, testo = self.fetching(msg)
                         if ruolo == "user" and testo:
-                            domanda_tmp = testo # testo qui è la domanda dell'utente
+                            domanda_tmp = testo
                         elif ruolo == "assistant" and testo:
-                            if domanda_tmp: # Prende domanda utente e la unisce alla risposta ai (testo)
+                            if domanda_tmp:
                                 turni_della_traccia.append({
                                     "input": domanda_tmp,
                                     "actual_output": testo
                                 })
                                 domanda_tmp = ""
 
-                # Usiamo ">=" per prendere la più lunga e, a parità, la più recente
                 numero_turni_attuali = len(turni_della_traccia)
-                if numero_turni_attuali >= max_turni_trovati and numero_turni_attuali >= 2:
-                    max_turni_trovati = numero_turni_attuali
+
+                # Se la traccia recente che abbiamo appena scaricato ha almeno 2 turni,
+                # LA SALVIAMO E INTERROMPIAMO IMMEDIATAMENTE IL CICLO
+                if numero_turni_attuali >= 2:
                     conversazione_migliore = {
                         "id_traccia_finale": t_info.id,
                         "numero_turni": numero_turni_attuali,
                         "turni": turni_della_traccia
                     }
+                    print(f"    [OK] Trovato storico completo ({numero_turni_attuali} turni). Interrompo la ricerca.")
+                    break  # <--- BLOCCA IL CICLO FOR
+                else:
+                    # Se per caso l'ultima traccia era difettosa o vuota, il ciclo continua
+                    # e andrà a scaricare la penultima.
+                    print(f"    [-] La traccia aveva solo {numero_turni_attuali} turni. Controllo la precedente...")
 
             # --- ASSEMBLAGGIO FINALE ---
             if conversazione_migliore:
