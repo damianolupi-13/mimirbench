@@ -7,7 +7,7 @@
 
 MimirBench integra e personalizza diverse tecnologie open-source. Di seguito i riferimenti ai progetti originali e alle relative licenze:
 
-* **[Ragas](https://github.com/vibrantlabsai/ragas)**  
+* **[RAGAS](https://github.com/vibrantlabsai/ragas)**  
   Il codice è stato modificato ed esteso per le necessità del progetto.  
   *Licenza: Apache License 2.0*
 
