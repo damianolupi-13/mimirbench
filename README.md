@@ -11,7 +11,7 @@ MimirBench integra e personalizza diverse tecnologie open-source. Di seguito i r
   Il codice è stato modificato ed esteso per le necessità del progetto.  
   *Licenza: Apache License 2.0*
 
-* **[Deepeval](https://github.com/confident-ai/deepeval)**  
+* **[DeepEval](https://github.com/confident-ai/deepeval)**  
   Alcune classi sono state estese per aggiungere funzionalità specifiche.  
   *Licenza: Apache License 2.0*
 
