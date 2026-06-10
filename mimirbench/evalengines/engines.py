@@ -117,7 +117,7 @@ class AgentEvalEngine(BaseEvalEngine):
     def __init__(self, json_dati_path: str = "", output_csv_path: str = "", parallel_launches: int = 1, tool_list: list = None,
                  provider: str = "openai", model: str = "gpt-5-nano"):
         super().__init__(json_dati_path, output_csv_path, parallel_launches, provider, model)
-        self._test_path = "test_tech_metrics.py"
+        self._test_path = "test_agent_metrics.py"
         self._tool_list = tool_list if tool_list is not None else []
 
     def run(self):
