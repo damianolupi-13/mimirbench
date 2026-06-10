@@ -25,12 +25,8 @@ if chiave_salvata:
             os.environ["OPENAI_API_KEY"] = chiave_salvata
         case "anthropic":
             os.environ["ANTHROPIC_API_KEY"] = chiave_salvata
-        case "mistral":
-            os.environ["MISTRAL_API_KEY"] = chiave_salvata
         case "google" | "gemini":
             os.environ["GOOGLE_API_KEY"] = chiave_salvata
-        case "cohere":
-            os.environ["COHERE_API_KEY"] = chiave_salvata
         case _:
             print(f"[ATTENZIONE] Provider '{provider}' non riconosciuto. Chiave non impostata.")
 

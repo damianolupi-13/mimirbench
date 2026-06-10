@@ -24,7 +24,7 @@ class ContextualTraceExtractor(BaseTraceExtractor):
     def __init__(self, langfuse_instance):
         super().__init__(langfuse_instance)
 
-    def fetching(self, trace_output):
+    def _fetching(self, trace_output):
         """Estrae il testo se è una risposta finale (messaggio AI senza tool calls)"""
 
         if isinstance(trace_output, dict) and "messages" in trace_output:
@@ -48,7 +48,7 @@ class ContextualTraceExtractor(BaseTraceExtractor):
             # --- CONTROLLO RICERCA INIZIALE ---
             for tentativo in range(3):
                 try:
-                    res = self.langfuse_instance.api.trace.list(limit=100, tags=["env:test"])
+                    res = self._langfuse_instance.api.trace.list(limit=100, tags=["env:test"])
                     break
                 except Exception as err:
                     print(f"    [!] Timeout ricerca lista (Tentativo {tentativo + 1}/3). Ritento...")
@@ -80,7 +80,7 @@ class ContextualTraceExtractor(BaseTraceExtractor):
                 # --- CONTROLLO SINGOLA TRACCIA ---
                 for tentativo in range(3):
                     try:
-                        trace = self.langfuse_instance.api.trace.get(t_info.id)  # Prendiamo la singola traccia
+                        trace = self._langfuse_instance.api.trace.get(t_info.id)  # Prendiamo la singola traccia
                         break
                     except Exception as err:
                         print(
@@ -101,7 +101,7 @@ class ContextualTraceExtractor(BaseTraceExtractor):
                 # Langfuse restituisce i dati dal più recente al più vecchio
                 for obs in trace.observations:
                     if obs.name == "react_agent":
-                        testo = self.fetching(obs.output)
+                        testo = self._fetching(obs.output)
                         if testo:  # Manteniamo un controllo su quale effettivamente delle fasi react_agent formula la risposta
                             # Abbiamo trovato l'ultimo react_agent (quello della risposta)
                             input_data = getattr(obs, 'input', {})

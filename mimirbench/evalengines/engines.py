@@ -28,12 +28,12 @@ class BaseEvalEngine(ABC):
     def __init__(self, json_dati_path: str = "", output_csv_path: str = "", parallel_launches: int = 1, provider: str = "openai",
                  model: str = "gpt-5-nano"):
             # Convertiamo i path in percorsi ASSOLUTI basati su dove viene lanciato lo script principale
-            self.json_dati_path = os.path.abspath(json_dati_path) if json_dati_path else ""
-            self.output_csv_path = os.path.abspath(output_csv_path) if output_csv_path else ""
-            self.parallel_launches = parallel_launches
-            self.provider = provider.lower()
-            self.model = model
-            self.test_path = None
+            self._json_dati_path = os.path.abspath(json_dati_path) if json_dati_path else ""
+            self._output_csv_path = os.path.abspath(output_csv_path) if output_csv_path else ""
+            self._parallel_launches = parallel_launches
+            self._provider = provider.lower()
+            self._model = model
+            self._test_path = None
 
     def _get_base_env(self) -> dict:
         """
@@ -44,7 +44,7 @@ class BaseEvalEngine(ABC):
 
         # --- GESTIONE GENERICA AMBIENTE ---
         print("\n=== CONFIGURAZIONE AMBIENTE MIMIR ===")
-        print(f"Provider Giudice Selezionato: {self.provider.upper()}")
+        print(f"Provider Giudice Selezionato: {self._provider.upper()}")
         print(f"API_KEY Globale impostata: {'API_KEY' in custom_env}")
         print("=====================================")
 
@@ -75,35 +75,35 @@ class RagEvalEngine(BaseEvalEngine):
     def __init__(self, json_dati_path: str = "", output_csv_path: str = "", parallel_launches: int = 5, provider: str = "openai",
                  model: str = "gpt-5-nano"):
         super().__init__(json_dati_path, output_csv_path, parallel_launches, provider, model)
-        self.test_path = "test_RAGMetrics.py"
+        self._test_path = "test_RAGMetrics.py"
 
     def run(self):
         cartella_corrente = os.path.dirname(os.path.abspath(__file__))
-        script_path = os.path.join(cartella_corrente, self.test_path)
+        script_path = os.path.join(cartella_corrente, self._test_path)
         config_path = os.path.join(cartella_corrente, "mimir_config.json")
 
         if not os.path.exists(script_path):
             raise FileNotFoundError(f"\n[ERRORE MIMIR ENGINE] Script di test non trovato: {script_path}")
 
-        print(f"\n[MIMIR ENGINE] Avvio RagEvalEngine sul file: {self.test_path}")
+        print(f"\n[MIMIR ENGINE] Avvio RagEvalEngine sul file: {self._test_path}")
 
         api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("API_KEY", "")
 
         config_data = {
-            "MIMIR_JSON_PATH": self.json_dati_path,
-            "MIMIR_CSV_PATH": self.output_csv_path,
-            "MIMIR_EVAL_PROVIDER": self.provider,
-            "MIMIR_EVAL_MODEL": self.model,
+            "MIMIR_JSON_PATH": self._json_dati_path,
+            "MIMIR_CSV_PATH": self._output_csv_path,
+            "MIMIR_EVAL_PROVIDER": self._provider,
+            "MIMIR_EVAL_MODEL": self._model,
             "MIMIR_EVAL_API_KEY": api_key
         }
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config_data, f, indent=4)
 
         comando = ["deepeval", "test", "run", script_path]
-        if self.parallel_launches > 1:
-            comando.extend(["-n", str(self.parallel_launches)])
+        if self._parallel_launches > 1:
+            comando.extend(["-n", str(self._parallel_launches)])
 
-        print(f"\n[MIMIR ENGINE] Esecuzione PARALLELA attivata: {self.parallel_launches} worker")
+        print(f"\n[MIMIR ENGINE] Esecuzione PARALLELA attivata: {self._parallel_launches} worker")
 
         # Il comando più normale e pulito possibile
         try:
@@ -117,37 +117,37 @@ class AgentEvalEngine(BaseEvalEngine):
     def __init__(self, json_dati_path: str = "", output_csv_path: str = "", parallel_launches: int = 1, tool_list: list = None,
                  provider: str = "openai", model: str = "gpt-5-nano"):
         super().__init__(json_dati_path, output_csv_path, parallel_launches, provider, model)
-        self.test_path = "test_tech_metrics.py"
-        self.tool_list = tool_list if tool_list is not None else []
+        self._test_path = "test_tech_metrics.py"
+        self._tool_list = tool_list if tool_list is not None else []
 
     def run(self):
         cartella_corrente = os.path.dirname(os.path.abspath(__file__))
-        script_path = os.path.join(cartella_corrente, self.test_path)
+        script_path = os.path.join(cartella_corrente, self._test_path)
         config_path = os.path.join(cartella_corrente, "mimir_config.json")
 
         if not os.path.exists(script_path):
             raise FileNotFoundError(f"\n[ERRORE MIMIR ENGINE] Script di test non trovato: {script_path}")
 
-        print(f"\n[MIMIR ENGINE] Avvio AgentEvalEngine sul file: {self.test_path}")
+        print(f"\n[MIMIR ENGINE] Avvio AgentEvalEngine sul file: {self._test_path}")
 
         api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("API_KEY", "")
 
         config_data = {
-            "MIMIR_JSON_PATH": self.json_dati_path,
-            "MIMIR_CSV_PATH": self.output_csv_path,
-            "MIMIR_AVAILABLE_TOOLS": self.tool_list,
-            "MIMIR_EVAL_PROVIDER": self.provider,
-            "MIMIR_EVAL_MODEL": self.model,
+            "MIMIR_JSON_PATH": self._json_dati_path,
+            "MIMIR_CSV_PATH": self._output_csv_path,
+            "MIMIR_AVAILABLE_TOOLS": self._tool_list,
+            "MIMIR_EVAL_PROVIDER": self._provider,
+            "MIMIR_EVAL_MODEL": self._model,
             "MIMIR_EVAL_API_KEY": api_key
         }
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config_data, f, indent=4)
 
         comando = ["deepeval", "test", "run", script_path]
-        if self.parallel_launches > 1:
-            comando.extend(["-n", str(self.parallel_launches)])
+        if self._parallel_launches > 1:
+            comando.extend(["-n", str(self._parallel_launches)])
 
-        print(f"\n[MIMIR ENGINE] Esecuzione PARALLELA attivata: {self.parallel_launches} worker")
+        print(f"\n[MIMIR ENGINE] Esecuzione PARALLELA attivata: {self._parallel_launches} worker")
 
         try:
             subprocess.run(comando, text=True, env=self._get_base_env(), cwd=cartella_corrente)
@@ -161,35 +161,35 @@ class MemoryEvalEngine(BaseEvalEngine):
     def __init__(self, json_dati_path: str = "", output_csv_path: str = "", parallel_launches: int = 1, provider: str = "openai",
                  model: str = "gpt-5-nano"):
         super().__init__(json_dati_path, output_csv_path, parallel_launches, provider, model)
-        self.test_path = "test_memory_metric.py"
+        self._test_path = "test_memory_metric.py"
 
     def run(self):
         cartella_corrente = os.path.dirname(os.path.abspath(__file__))
-        script_path = os.path.join(cartella_corrente, self.test_path)
+        script_path = os.path.join(cartella_corrente, self._test_path)
         config_path = os.path.join(cartella_corrente, "mimir_config.json")
 
         if not os.path.exists(script_path):
             raise FileNotFoundError(f"\n[ERRORE MIMIR ENGINE] Script di test non trovato: {script_path}")
 
-        print(f"\n[MIMIR ENGINE] Avvio MemoryEvalEngine sul file: {self.test_path}")
+        print(f"\n[MIMIR ENGINE] Avvio MemoryEvalEngine sul file: {self._test_path}")
 
         api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("API_KEY", "")
 
         config_data = {
-            "MIMIR_JSON_PATH": self.json_dati_path,
-            "MIMIR_CSV_PATH": self.output_csv_path,
-            "MIMIR_EVAL_PROVIDER": self.provider,
-            "MIMIR_EVAL_MODEL": self.model,
+            "MIMIR_JSON_PATH": self._json_dati_path,
+            "MIMIR_CSV_PATH": self._output_csv_path,
+            "MIMIR_EVAL_PROVIDER": self._provider,
+            "MIMIR_EVAL_MODEL": self._model,
             "MIMIR_EVAL_API_KEY": api_key
         }
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config_data, f, indent=4)
 
         comando = ["deepeval", "test", "run", script_path]
-        if self.parallel_launches > 1:
-            comando.extend(["-n", str(self.parallel_launches)])
+        if self._parallel_launches > 1:
+            comando.extend(["-n", str(self._parallel_launches)])
 
-        print(f"\n[MIMIR ENGINE] Esecuzione PARALLELA attivata: {self.parallel_launches} worker")
+        print(f"\n[MIMIR ENGINE] Esecuzione PARALLELA attivata: {self._parallel_launches} worker")
 
         try:
             subprocess.run(comando, text=True, env=self._get_base_env(), cwd=cartella_corrente)

@@ -22,9 +22,9 @@ class BaseTestset(ABC):
 
     #Costruttore con filepaths dei dati/documenti da analizzare o da cui prendere i testset di domande
     def __init__(self):
-        self.loaded_filepaths = []
-        self.docs = []
-        self.output_csv = None
+        self._loaded_filepaths = []
+        self._docs = []
+        self._output_csv = None
 
     #Metodo astratto per il caricamento dei dati/documenti
     @abstractmethod

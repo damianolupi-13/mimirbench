@@ -23,7 +23,7 @@ class MemoryTraceExtractor(BaseTraceExtractor):
     def __init__(self, langfuse_instance):
         super().__init__(langfuse_instance)
 
-    def fetching(self, trace_output):
+    def _fetching(self, trace_output):
         """
             Parser per estrarre il puro dialogo verbale dall'output di una traccia
         """
@@ -71,7 +71,7 @@ class MemoryTraceExtractor(BaseTraceExtractor):
             for tentativo in range(3):
                 try:
                     # limit = 50, ci interessa trovare UNA traccia sola
-                    res = self.langfuse_instance.api.trace.list(limit=50, tags=["env:test"])
+                    res = self._langfuse_instance.api.trace.list(limit=50, tags=["env:test"])
                     break
                 except Exception as err:
                     print(f"    [!] Timeout ricerca lista (Tentativo {tentativo + 1}/3). Ritento...")
@@ -113,7 +113,7 @@ class MemoryTraceExtractor(BaseTraceExtractor):
                 # --- CONTROLLO SINGOLA TRACCIA ---
                 for tentativo in range(3):
                     try:
-                        trace = self.langfuse_instance.api.trace.get(t_info.id)
+                        trace = self._langfuse_instance.api.trace.get(t_info.id)
                         osservazioni = sorted(trace.observations, key=lambda x: getattr(x, 'start_time', 0))
                         break
                     except Exception as err:
@@ -141,7 +141,7 @@ class MemoryTraceExtractor(BaseTraceExtractor):
 
                     domanda_tmp = ""
                     for msg in tutti_i_messaggi:
-                        ruolo, testo = self.fetching(msg)
+                        ruolo, testo = self._fetching(msg)
                         if ruolo == "user" and testo:
                             domanda_tmp = testo
                         elif ruolo == "assistant" and testo:

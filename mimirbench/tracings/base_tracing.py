@@ -24,11 +24,11 @@ class BaseTraceExtractor(ABC):
 
     #Costruttore con tag delle traces da cercare
     def __init__(self, langfuse_instance):
-        self.langfuse_instance = langfuse_instance
+        self._langfuse_instance = langfuse_instance
 
     #Metodo astratto per il recupero di informazioni necessarie (se serve)
     @abstractmethod
-    def fetching(self,  trace_output):
+    def _fetching(self,  trace_output):
         """Ogni sottoclasse deve implementare se e come recuperare singole informazioni necessarie
            da output specifici della traccia Langfuse."""
         pass

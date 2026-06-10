@@ -24,6 +24,8 @@ from langchain_community.document_loaders import PyPDFLoader, TextLoader, Unstru
 
 # Import necessari Ragas
 from ragas.llms import llm_factory
+from langchain_anthropic import ChatAnthropic
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from ragas.embeddings import OpenAIEmbeddings
 from ragas.testset import TestsetGenerator
 from ragas.utils import num_tokens_from_string
@@ -71,29 +73,28 @@ class ContextualTestset(BaseTestset):
             pagina_di_partenza (int, opzionale): L'indice della pagina o del chunk da cui far partire
                                                  il taglio di sicurezza. Default: 1.
     """
-    def __init__(self, testset_size: int, model: str, client, embedding: str, context: str, max_tokens = 8192,
+
+    def __init__(self, testset_size: int, model: str, client, embedding: str, context: str, provider: str = "openai", max_tokens=8192,
                  soglia_limite=100, pagine_da_estrarre=100, pagina_di_partenza=1):
         super().__init__()
-        self.testset_size = testset_size
-        self.llm_model = model
-        self.model_client = client
-        self.embedding_model = embedding
-        self.llm_generator_context = context
-        self.max_allowed_tokens = max_tokens
-        self.soglia_limite = soglia_limite
-        self.pagine_da_estrarre = pagine_da_estrarre
-        self.pagina_di_partenza = pagina_di_partenza
+        # Parametri di configurazione (Protected)
+        self._testset_size = testset_size
+        self._llm_model = model
+        self._model_client = client
+        self._embedding_model = embedding
+        self._llm_generator_context = context
+        self._provider = provider
+        self._max_allowed_tokens = max_tokens
+        self._soglia_limite = soglia_limite
+        self._pagine_da_estrarre = pagine_da_estrarre
+        self._pagina_di_partenza = pagina_di_partenza
 
-    #Implementazione metodo load del caso base per caso contextual
-    def load(self,  filepath: str):
-        # Salviamo i file caricati in una lista
-        if not filepath in self.loaded_filepaths:
-            self.loaded_filepaths.append(filepath)
-
+    def load(self, filepath: str):
+        if filepath not in self._loaded_filepaths:
+            self._loaded_filepaths.append(filepath)
             extension = Path(filepath).suffix.lower()
-
-            #Match/Case basato sull'extension
             nuovi_docs = []
+
             match extension:
                 case ".pdf":
                     loader = PyPDFLoader(filepath)
@@ -107,34 +108,21 @@ class ContextualTestset(BaseTestset):
                 case ".md":
                     loader = UnstructuredMarkdownLoader(filepath)
                     nuovi_docs = loader.load()
-
-                # --- PARSING TABELLARE PER RAGAS ---
                 case ".csv" | ".xlsx":
-                    # 1. Lettura in DataFrame
                     if extension == ".csv":
                         df = pd.read_csv(filepath)
                     else:
                         df = pd.read_excel(filepath, engine="openpyxl")
-
                     documenti_tabellari = []
-
-                    # Serializzazione semantica per il Node Parser di RAGAS
-                    righe_per_doc = 10  # Raggruppa 10 righe per doc
+                    righe_per_doc = 10
                     for i in range(0, len(df), righe_per_doc):
                         batch = df.iloc[i: i + righe_per_doc]
-                        # Serializziamo il batch di 10 righe
                         testo_batch = ""
                         for indice, riga in batch.iterrows():
                             testo_riga = "; ".join([f"{col}: {val}" for col, val in riga.items() if pd.notna(val)])
                             testo_batch += f"Record {indice}: {testo_riga}\n"
-
-                        # Istanziazione dell'oggetto Document supportato da RAGAS
-                        doc = Document(
-                            page_content=testo_batch,
-                            metadata={"source": filepath, "row_index": i}
-                        )
+                        doc = Document(page_content=testo_batch, metadata={"source": filepath, "row_index": i})
                         documenti_tabellari.append(doc)
-
                     nuovi_docs = documenti_tabellari
                     print(f"Tabella caricata: serializzate {len(nuovi_docs)} righe")
                 case _:
@@ -142,29 +130,21 @@ class ContextualTestset(BaseTestset):
 
             print(f"\n[i] File '{filepath}' ({len(nuovi_docs)} chunks) aggiunto")
 
-            if len(nuovi_docs) > self.soglia_limite:
+            if len(nuovi_docs) > self._soglia_limite:
                 print(f"\n[!] ALERT: Rilevati {len(nuovi_docs)} chunks. Il documento è molto denso.")
-
-                start_page = self.pagina_di_partenza
-
-                # La funzione min() assicura che se si supera la grandezza del documento,
-                # l'end_page si fermerà all'ultima pagina reale di quest'ultimo
-                end_page = min(start_page + self.pagine_da_estrarre, len(nuovi_docs))
-
+                start_page = self._pagina_di_partenza
+                end_page = min(start_page + self._pagine_da_estrarre, len(nuovi_docs))
                 nuovi_docs = nuovi_docs[start_page:end_page]
-
                 print(f"[!] TAGLIO APPLICATO: Mantenuti {len(nuovi_docs)} chunks (da {start_page} a {end_page}).")
             else:
                 print(f"\n[i] Documento completo in elaborazione.")
 
-            # Accodiamo i docs nuovi all'insieme
-            self.docs.extend(nuovi_docs)
-            print(f"\nAccodamento completato. Chunks totali in memoria pronti per il testset: {len(self.docs)}")
+            self._docs.extend(nuovi_docs)
+            print(f"\nAccodamento completato. Chunks totali in memoria pronti per il testset: {len(self._docs)}")
         else:
             print("File già caricato!")
 
     def generate_testset(self, output_csv_path: str):
-        # Valori di settings
         pd.set_option('display.max_colwidth', None)
         pd.set_option('display.max_rows', None)
 
@@ -172,20 +152,28 @@ class ContextualTestset(BaseTestset):
         if target_path.suffix.lower() != '.csv':
             target_path = target_path.with_suffix('.csv')
 
-        # Assegnazione del path
-        self.output_csv = str(target_path)
+        self._output_csv = str(target_path)
 
-        #Implementazione metodo di estrazione e costruzione grafo per il testset di Ragas
-        generator_llm = llm_factory(self.llm_model, client=self.model_client, max_tokens=self.max_allowed_tokens)
-        generator_embeddings = OpenAIEmbeddings(client=self.model_client, model=self.embedding_model)
+        match self._provider:
+            case "openai":
+                generator_llm = llm_factory(self._llm_model, client=self._model_client, max_tokens=self._max_allowed_tokens)
+                generator_embeddings = OpenAIEmbeddings(client=self._model_client, model=self._embedding_model)
 
-        # --- FUNZIONI DI FILTRO ---
-        #Contiamo e facciamo la media dei tipi di chunks estratti dai documenti (in base al conteggio dei token)
-        counts = [num_tokens_from_string(doc.page_content) for doc in self.docs]
-        pct_long = sum(1 for c in counts if c > 500) / len(self.docs)
-        pct_med = sum(1 for c in counts if 101 <= c <= 500) / len(self.docs)
+            case "anthropic":
+                generator_llm = ChatAnthropic(model_name=self._llm_model, max_tokens_to_sample=self._max_allowed_tokens,timeout=None, stop=None)
+                generator_embeddings = OpenAIEmbeddings(client=self._model_client, model=self._embedding_model)
 
-        # Funzioni di filtro per smistare i docs
+            case "google" | "gemini":
+                generator_llm = ChatGoogleGenerativeAI(model=self._llm_model, max_output_tokens=self._max_allowed_tokens)
+                generator_embeddings = GoogleGenerativeAIEmbeddings(model=self._embedding_model)
+
+            case _:
+                raise ValueError(f"[!] Provider '{self._provider}' non supportato per la generazione del testset.")
+
+        counts = [num_tokens_from_string(doc.page_content) for doc in self._docs]
+        pct_long = sum(1 for c in counts if c > 500) / len(self._docs)
+        pct_med = sum(1 for c in counts if 101 <= c <= 500) / len(self._docs)
+
         def filter_doc_long(n):
             return n.type == NodeType.DOCUMENT and num_tokens_from_string(n.properties.get("page_content", "")) > 500
 
@@ -195,15 +183,11 @@ class ContextualTestset(BaseTestset):
         def filter_chunks(n):
             return n.type == NodeType.CHUNK
 
-        # LOGICA DINAMICA (Replicata dal default_transforms di Ragas)
         custom_transforms = []
-
-        # Costruzione dei transforms per il grafo di Ragas, a seconda della lunghezza dei chunks del documento
         if pct_long >= 0.25:
             print(f"\n>>> Rilevati DOCUMENTI LUNGHI ({pct_long:.0%}).")
             custom_transforms = [
                 HeadlinesExtractor(llm=generator_llm, filter_nodes=filter_doc_long),
-                # FIX: Non crasha se mancano le headlines
                 HeadlineSplitter(filter_nodes=lambda n: 'headlines' in n.properties and n.properties['headlines']),
                 SummaryExtractor(llm=generator_llm, filter_nodes=filter_doc_long),
                 CustomNodeFilter(llm=generator_llm, filter_nodes=filter_chunks),
@@ -216,11 +200,9 @@ class ContextualTestset(BaseTestset):
                 Parallel(
                     CosineSimilarityBuilder(property_name="summary_embedding", new_property_name="summary_similarity",
                                             threshold=0.7, filter_nodes=filter_doc_long),
-                    # Soglia abbassata per Multi-hop
                     OverlapScoreBuilder(threshold=0.01, filter_nodes=filter_chunks)
                 )
             ]
-
         elif pct_med >= 0.25:
             print(f"\n>>> Rilevati DOCUMENTI MEDI ({pct_med:.0%}).")
             custom_transforms = [
@@ -239,27 +221,24 @@ class ContextualTestset(BaseTestset):
                 )
             ]
         else:
-            print("\n>>> Documenti molto corti. Inserire documenti pù lunghi.")
+            print("\n>>> Documenti molto corti. Inserire documenti più lunghi.")
 
-        # Generator
         generator = TestsetGenerator(
             llm=generator_llm,
             embedding_model=generator_embeddings,
-            llm_context=self.llm_generator_context
+            llm_context=self._llm_generator_context
         )
 
-        # Risultato
         print("\nAvvio generazione...")
-        # Passiamo 'transforms=custom_transforms' per attivare la generazione
         dataset = generator.generate_with_langchain_docs(
-            self.docs,
-            testset_size=self.testset_size,
+            self._docs,
+            testset_size=self._testset_size,
             transforms=custom_transforms,
         )
 
         df_completo = dataset.to_pandas()
         df_domande = df_completo[['user_input']]
-        df_domande.to_csv(self.output_csv, index=False)
+        df_domande.to_csv(self._output_csv, index=False)
         print("\n=== GENERAZIONE COMPLETATA ===")
         for i, domanda in enumerate(df_domande['user_input']):
             print(f"{i}. {domanda}")

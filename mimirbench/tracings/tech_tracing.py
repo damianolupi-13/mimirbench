@@ -26,7 +26,7 @@ class TechnicalTraceExtractor(BaseTraceExtractor):
         super().__init__(langfuse_instance)
 
     # Metodo per il fetching di determinate caratteristiche dell'output non serve
-    def fetching(self, trace_output):
+    def _fetching(self, trace_output):
         return None
 
     def extracting(self, output_json_path: str, test_id: str):
@@ -39,7 +39,7 @@ class TechnicalTraceExtractor(BaseTraceExtractor):
             # --- CONTROLLO RICERCA INIZIALE ---
             for tentativo in range(3):
                 try:
-                    res = self.langfuse_instance.api.trace.list(limit=100, tags=["env:test"])
+                    res = self._langfuse_instance.api.trace.list(limit=100, tags=["env:test"])
                     break
                 except Exception as err:
                     print(f"    [!] Timeout ricerca lista (Tentativo {tentativo + 1}/3). Ritento...")
@@ -73,7 +73,7 @@ class TechnicalTraceExtractor(BaseTraceExtractor):
                 # --- CONTROLLO SINGOLA TRACCIA ---
                 for tentativo in range(3):
                     try:
-                        trace = self.langfuse_instance.api.trace.get(t_info.id)
+                        trace = self._langfuse_instance.api.trace.get(t_info.id)
                         osservazioni = sorted(trace.observations, key=lambda x: getattr(x, 'start_time', 0))
                         break
                     except Exception as err:
