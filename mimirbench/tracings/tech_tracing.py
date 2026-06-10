@@ -17,7 +17,7 @@ import time
 from mimirbench.tracings.base_tracing import BaseTraceExtractor
 
 
-class TechnicalTraceExtractor(BaseTraceExtractor):
+class AgentTraceExtractor(BaseTraceExtractor):
     """
         Classe per scaricare e usare le traces Langfuse riferite alla valutazione tecnica dell'agente
     """

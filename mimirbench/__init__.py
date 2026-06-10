@@ -13,9 +13,12 @@ from .tracings import (
     BaseTraceExtractor,
     ContextualTraceExtractor,
     MemoryTraceExtractor,
-    TechnicalTraceExtractor
+    AgentTraceExtractor
 )
-#from .printers import Visualizer
+from .printers import (
+    MimirPDFPrinter,
+    LangfusePrinter
+)
 
 # Esposizione totale
 __all__ = [
@@ -33,8 +36,9 @@ __all__ = [
     "BaseTraceExtractor",
     "ContextualTraceExtractor",
     "MemoryTraceExtractor",
-    "TechnicalTraceExtractor",
+    "AgentTraceExtractor",
 
-    # Visualization Tools
-
+    # Printer / Export Tools
+    "MimirPDFPrinter",
+    "LangfusePrinter"
 ]
