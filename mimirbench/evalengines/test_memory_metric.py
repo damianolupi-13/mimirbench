@@ -5,7 +5,7 @@ import time
 import pytest
 import pandas as pd
 
-config_path = os.path.join(os.path.dirname(__file__), "mimir_config.json")
+config_path = os.path.join(os.path.dirname(__file__), "mimir_eval_config.json")
 config_data = {}
 
 if os.path.exists(config_path):

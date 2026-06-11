@@ -64,6 +64,7 @@ class ContextualTestset(BaseTestset):
             context (str): Le direttive di sistema (system prompt) fornite al generatore.
                            Utile per forzare la lingua dell'output e impostare regole restrittive
                            sulla struttura delle domande
+            provider (str, opzionale): Il nome del provider dell’API che fornisce il modello LLM utilizzato. Default = "openai"
             max_tokens (int, opzionale): Il limite massimo di token gestibili dal modello LLM per una singola richiesta. Default: 8192
             soglia_limite (int, opzionale): La soglia massima di chunk/pagine tollerata in memoria.
                                             Se il documento caricato supera questo limite, viene
@@ -83,7 +84,7 @@ class ContextualTestset(BaseTestset):
         self._model_client = client
         self._embedding_model = embedding
         self._llm_generator_context = context
-        self._provider = provider
+        self._provider = provider.lower()
         self._max_allowed_tokens = max_tokens
         self._soglia_limite = soglia_limite
         self._pagine_da_estrarre = pagine_da_estrarre
@@ -185,7 +186,7 @@ class ContextualTestset(BaseTestset):
 
         custom_transforms = []
         if pct_long >= 0.25:
-            print(f"\n>>> Rilevati DOCUMENTI LUNGHI ({pct_long:.0%}).")
+            print(f"\n>>> Rilevate PORZIONI DI TESTO LUNGHE ({pct_long:.0%}).")
             custom_transforms = [
                 HeadlinesExtractor(llm=generator_llm, filter_nodes=filter_doc_long),
                 HeadlineSplitter(filter_nodes=lambda n: 'headlines' in n.properties and n.properties['headlines']),
@@ -204,7 +205,7 @@ class ContextualTestset(BaseTestset):
                 )
             ]
         elif pct_med >= 0.25:
-            print(f"\n>>> Rilevati DOCUMENTI MEDI ({pct_med:.0%}).")
+            print(f"\n>>> Rilevate PORZIONI DI TESTO MEDIE ({pct_med:.0%}).")
             custom_transforms = [
                 SummaryExtractor(llm=generator_llm, filter_nodes=filter_doc_med),
                 CustomNodeFilter(llm=generator_llm),
@@ -221,7 +222,7 @@ class ContextualTestset(BaseTestset):
                 )
             ]
         else:
-            print("\n>>> Documenti molto corti. Inserire documenti più lunghi.")
+            raise ValueError("\n[!] Porzioni di testo troppo corte. Inserire documenti più densi.")
 
         generator = TestsetGenerator(
             llm=generator_llm,

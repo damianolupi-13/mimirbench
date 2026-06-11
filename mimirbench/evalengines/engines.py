@@ -33,7 +33,6 @@ class BaseEvalEngine(ABC):
             self._parallel_launches = parallel_launches
             self._provider = provider.lower()
             self._model = model
-            self._test_path = None
 
     def _get_base_env(self) -> dict:
         """
@@ -67,7 +66,7 @@ class BaseEvalEngine(ABC):
         pass
 
 
-# --- CLASSI PUBBLICHE (Implementazioni degli Engine) ---
+# --- Implementazioni degli Engine ---
 
 class RagEvalEngine(BaseEvalEngine):
     """Motore dedicato alle metriche RAG tradizionali"""
@@ -80,7 +79,7 @@ class RagEvalEngine(BaseEvalEngine):
     def run(self):
         cartella_corrente = os.path.dirname(os.path.abspath(__file__))
         script_path = os.path.join(cartella_corrente, self._test_path)
-        config_path = os.path.join(cartella_corrente, "mimir_config.json")
+        config_path = os.path.join(cartella_corrente, "mimir_eval_config.json")
 
         if not os.path.exists(script_path):
             raise FileNotFoundError(f"\n[ERRORE MIMIR ENGINE] Script di test non trovato: {script_path}")

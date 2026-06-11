@@ -6,7 +6,7 @@ import pytest
 import pandas as pd
 
 # Lettura dinamica dei path e dei tool dal JSON di configurazione
-config_path = os.path.join(os.path.dirname(__file__), "mimir_config.json")
+config_path = os.path.join(os.path.dirname(__file__), "mimir_eval_config.json")
 config_data = {}
 
 if os.path.exists(config_path):

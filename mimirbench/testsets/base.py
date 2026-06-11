@@ -28,7 +28,7 @@ class BaseTestset(ABC):
 
     #Metodo astratto per il caricamento dei dati/documenti
     @abstractmethod
-    def load(self,  filepath: str):
+    def load(self, filepath: str):
         """Ogni sottoclasse deve implementare come caricare i dati/documenti."""
         pass
 
