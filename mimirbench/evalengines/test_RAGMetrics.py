@@ -61,7 +61,7 @@ if os.path.exists(CSV_FILE):
 # DEFINIZIONE METRICHE
 faithfulness = FaithfulnessMetric(threshold=0.7, model=custom_model, async_mode=True)
 relevancy = AnswerRelevancyMetric(threshold=0.7, model=custom_model, async_mode=True)
-context_relevancy = ContextualRelevancyMetric(threshold=0.4, model=custom_model, async_mode=True)
+context_relevancy = ContextualRelevancyMetric(threshold=0.5, model=custom_model, async_mode=True)
 """professional_tone = GEval(
     name="Professional Tone",
     criteria="Determina se la risposta è scritta in un tono aziendale e professionale.",

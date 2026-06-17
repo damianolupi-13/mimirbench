@@ -53,7 +53,16 @@ class MimirPDFPrinter:
     def _clean_str(self, testo):
         if pd.isna(testo):
             return ""
-        return str(testo).encode('latin-1', 'replace').decode('latin-1').replace('\n', ' ').strip()
+
+        testo_pulito = (str(testo).replace("’", "'")
+                        .replace("‘", "'")
+                        .replace("“", '"')
+                        .replace("”", '"')
+                        .replace("—", " - ")  # Inserisce gli spazi per l'a capo
+                        .replace("–", " - ")
+                        .replace("€", "EUR "))
+
+        return testo_pulito.encode('latin-1', 'replace').decode('latin-1').replace('\n', ' ').strip()
 
     def _prepara_dati(self, df):
         df["Metrica"] = df["Metrica"].str.replace("Metric", "")
@@ -141,7 +150,7 @@ class MimirPDFPrinter:
         if not os.path.exists(self._csv_file):
             raise FileNotFoundError(f"File sorgente CSV non trovato: {self._csv_file}")
 
-        df_raw = pd.read_csv(self._csv_file, sep=";")
+        df_raw = pd.read_csv(self._csv_file, sep=";", encoding="utf-8")
         df_master, metriche = self._prepara_dati(df_raw)
 
         self._genera_grafici_matematici(df_raw, df_master, metriche)
@@ -295,7 +304,7 @@ class MimirPDFPrinter:
 
         def render_query_card(input_text, gruppo_metriche):
             spazio_minimo_richiesto = 40
-            if pdf.get_y() + spazio_minimo_richiesto > 270:
+            if pdf.get_y() + spazio_minimo_richiesto > 260:
                 pdf.add_page()
                 pdf.set_y(30)
 
@@ -309,7 +318,7 @@ class MimirPDFPrinter:
                      new_x="LMARGIN", new_y="NEXT")
 
             for _, riga in gruppo_metriche.iterrows():
-                if pdf.get_y() > 270:
+                if pdf.get_y() > 240:
                     pdf.add_page()
                     pdf.set_y(30)
 
